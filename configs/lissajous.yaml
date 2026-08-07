@@ -1,0 +1,5 @@
+title: Lissajous Curve Morph
+equation: x = \sin(3t + \delta), \; y = \sin(4t)
+simulation: lissajous
+
+fps: 30

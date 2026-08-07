@@ -1,0 +1,410 @@
+--- double_pendulum ---
+Equation: \ddot{\theta}_1 = f(\theta_1, \theta_2)
+Code Snippet:
+def double_pendulum_derivs(state, t, L1, L2, m1, m2, g):
+    """
+    State vector: [theta1, theta2, w1, w2]
+    state shape: (num_trajectories, 4)
+    """
+    theta1 = state[:, 0]
+    theta2 = state[:, 1]
+    w1 = state[:, 2]
+    w2 = state[:, 3]
+    
+    delta = theta1 - theta2
+    
+    mu = 1.0 + m1 / m2
+    cos_d = xp.cos(delta)
+    sin_d = xp.sin(delta)
+    
+    # Equation for theta1 acceleration (alpha1)
+    den1 = L1 * (mu - cos_d**2)
+    num1 = g * (xp.sin(theta2) * cos_d - mu * xp.sin(theta1)) - (L2 * w2**2 + L1 * w1**2 * cos_d) * sin_d
+    alpha1 = num1 / den1
+    
+    # Equation for theta2 acceleration (alpha2)
+    den2 = L2 * (mu - cos_d**2)
+    num2 = g * mu * (xp.sin(theta1) * cos_d - xp.sin(theta2)) + (mu * L1 * w1**2 + L2 * w2**2 * cos_d) * sin_d
+    alpha2 = num2 / den2
+    
+    # Derivatives
+    deriv = xp.zeros_like(state)
+    deriv[:, 0] = w1
+    deriv[:, 1] = w2
+    deriv[:, 2] = alpha1
+    deriv[:, 3] = alpha2
+    
+    return deriv
+
+--- lorenz ---
+Equation: \dot{x} = \sigma(y-x), \; \dot{y} = x(\rho-z)-y, \; \dot{z} = xy-\beta z
+Code Snippet:
+def lorenz_derivs(state, t, sigma, rho, beta):
+    """
+    Lorenz system equations of motion.
+    state shape: (num_trajectories, 3) where columns are [x, y, z]
+    """
+    x = state[:, 0]
+    y = state[:, 1]
+    z = state[:, 2]
+    
+    dx = sigma * (y - x)
+    dy = x * (rho - z) - y
+    dz = x * y - beta * z
+    
+    deriv = xp.zeros_like(state)
+    deriv[:, 0] = dx
+    deriv[:, 1] = dy
+    deriv[:, 2] = dz
+    
+    return deriv
+
+--- mandelbrot ---
+Equation: z_{n+1} = z_n^2 + c
+Code Snippet:
+import os
+import sys
+import numpy as np
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+def evaluate_point(inp):
+    c_val = inp["c"]
+    c = complex(c_val, 0)
+    z = 0j
+    for _ in range(100):
+        if abs(z) > 2.0:
+            return {"in_set": False}
+        z = z*z + c
+    return {"in_set": True}
+
+TEST_SPEC = {
+    "category": "known_points",
+    "known_points": [
+        ({"c": -1.0}, {"in_set": True
+
+--- three_body ---
+Equation: \ddot{q}_i = -G \sum_{j \neq i} m_j \frac{q_i - q_j}{|q_i - q_j|^3}
+Code Snippet:
+def three_body_derivs(state, t, m1, m2, m3, G):
+    """
+    State: 12 variables per trajectory:
+    [x1, y1, vx1, vy1, x2, y2, vx2, vy2, x3, y3, vx3, vy3]
+    state shape: (num_trajectories, 12)
+    """
+    q1 = state[:, 0:2]
+    v1 = state[:, 2:4]
+    q2 = state[:, 4:6]
+    v2 = state[:, 6:8]
+    q3 = state[:, 8:10]
+    v3 = state[:, 10:12]
+    
+    # Mutual distances
+    d12 = xp.linalg.norm(q1 - q2, axis=1, keepdims=True)
+    d23 = xp.linalg.norm(q2 - q3, axis=1, keepdims=True)
+    d31 = xp.linalg.norm(q3 - q1, axis=1, keepdims=True)
+    
+    # Regularization to prevent division by zero
+    eps = 1e-3
+    d12 = xp.maximum(d12, eps)
+    d23 = xp.maximum(d23, eps)
+    d31 = xp.maximum(d31, eps)
+    
+    # Gravitational accelerations
+    a1 = -G * m2 * (q1 - q2) / (d12**3) - G * m3 * (q1 - q3) / (d31**3)
+    a2 = -G * m1 * (q2 - q1) / (d12**3) - G * m3 * (q2 - q3) / (d23**3)
+    a3 = -G * m1 * (q3 - q1) / (d31**3) - G * m2 * (q3 - q2) / (d23**3)
+    
+    # Return derivatives
+    deriv = xp.zeros_like(state)
+    deriv[:, 0:2] = v1
+    deriv[:, 2:4] = a1
+    deriv[:, 4:6] = v2
+    deriv[:, 6:8] = a2
+
+--- logistic_map ---
+Equation: x_{n+1} = r x_n (1 - x_n)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+def find_bifurcation_transitions(config):
+    # known transitions: period 2 at r=3.0, period 4 at 3.449
+    # simple mock or basic calculation
+    return {
+        "period_2": 3.00,
+        "period_4": 3.449,
+        "chaos_onset": 3.569
+    }
+
+TEST_SPEC = {
+    "category": "bifurcation",
+    "known_t
+
+--- henon_map ---
+Equation: x_{n+1} = 1 - a x_n^2 + y_n, \; y_{n+1} = b x_n
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+# Universal Palette
+COLOR_ROLE_1 = xp.array([255.0, 50.0, 50.0])     # Bright Red
+COLOR_ROLE_2 = xp.array([50.0, 150.0, 255.0])    # Electric Blue
+COLOR_ROLE_3 = xp.array([50.0, 255.0, 50.0])     # Neon Green
+COLOR_TRAIL = xp.array([255.0, 120.0, 0.0])      # Orange
+
+def recommended_duratio
+
+--- lissajous ---
+Equation: x = \sin(3t + \delta), \; y = \sin(4t)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+# Universal Palette
+COLOR_ROLE_1 = (255, 50, 50)     # Bright Red
+COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue
+COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
+COLOR_TRAIL = (255, 120, 0)      # Orange
+
+def evaluate_point(inp):
+    t, delta = inp["t"], inp["delta"]
+    fx, fy = inp.get("fr
+
+--- spirograph ---
+Equation: x = (R-r)\cos\theta + d\cos\!\left(\frac{R-r}{r}\theta\right)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+# Universal Palette
+COLOR_ROLE_1 = (255, 50, 50)     # Bright Red
+COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue
+COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
+COLOR_TRAIL = (255, 120, 0)      # Orange
+
+def evaluate_point(inp):
+    theta = inp["theta"]
+    R, r, d = 300.0, 180.0, 150.0
+   
+
+--- gradient_descent ---
+Equation: \theta_{n+1} = \theta_n - \alpha \nabla f(\theta_n)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+def himmelblau(x, y):
+    """Himmelblau's function: f(x,y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2"""
+    return (x**2 + y - 11.0)**2 + (x + y**2 - 7.0)**2
+
+def himmelblau_grad(x, y):
+    """Gradient of Himmelblau's function."""
+    dfdx = 4.0 * x * (x**2 + y - 11.0) + 2.0 * (x + y**2 - 7.0)
+ 
+
+--- electric_field ---
+Equation: \vec{E} = \frac{1}{4\pi\epsilon_0} \sum_i q_i \frac{\vec{r} - \vec{r}_i}{|\vec{r} - \vec{r}_i|^3}
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+# Ensure backend can be imported
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+def evaluate_point(inp):
+    x, y = inp["x"], inp["y"]
+    # charges: 1.0 at (-1.5, 0), -1.0 at (1.5, 0)
+    q1, x1, y1 = 1.0, -1.5, 0.0
+    q2, x2, y2 = -1.0, 1.5, 0.0
+    
+    k = 1.0
+    dx1, dy1 = x - x1, y - y1
+    dx2, dy2 = x - x2, y - y2
+    r1 = max(np.sqrt(dx1**2 + dy1**2), 1e-6)
+
+
+--- euler ---
+Equation: e^{it} = \cos(t) + i\sin(t)
+Code Snippet:
+import numpy as np
+import cv2
+from PIL import Image, ImageDraw
+import math
+import os
+
+from drawing_utils import draw_hatching, draw_spring, draw_mass
+
+COLOR_BG = (0, 0, 0)
+COLOR_AXIS = (100, 100, 100)
+COLOR_VECTOR = (255, 255, 255)
+COLOR_RE = "#FF7F50" # Coral
+COLOR_IM = "#4169E1" # Cool Blue
+
+def recommended_duration(config: dict) -> float:
+    return 12.0 # Fixed duration for Euler's formula demonstration
+
+def generate(config: dict):
+    duration = float(config.get("duration", 12.0))
+    fps =
+
+--- rossler ---
+Equation: dx/dt = -y-z, \quad dy/dt = x+ay, \quad dz/dt = b+z(x-c)
+Code Snippet:
+def rossler_derivs(state, t, a, b, c):
+    x = state[:, 0]
+    y = state[:, 1]
+    z = state[:, 2]
+    
+    dx = -y - z
+    dy = x + a * y
+    dz = b + z * (x - c)
+    
+    deriv = xp.zeros_like(state)
+    deriv[:, 0] = dx
+    deriv[:, 1] = dy
+    deriv[:, 2] = dz
+    return deriv
+
+--- julia ---
+Equation: z_{n+1} = z_n^2 + c
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+COLOR_ROLE_1 = xp.array([255.0, 50.0, 50.0])
+COLOR_ROLE_2 = xp.array([50.0, 150.0, 255.0])
+COLOR_ROLE_3 = xp.array([50.0, 255.0, 50.0])
+COLOR_TRAIL = xp.array([255.0, 120.0, 0.0])
+
+def recommended_duration(config: dict) -> float:
+    return 20.0
+
+def get_palette_color(t, active):
+    t_3d = t[:, :, None]
+    
+    w1 = (xp.sin(2 * xp.
+
+--- epicycloid ---
+Equation: x(t) = R(k+1)\cos(t) - R\cos((k+1)t), \quad y(t) = R(k+1)\sin(t) - R\sin((k+1)t)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+COLOR_ROLE_1 = (255, 50, 50)
+COLOR_ROLE_2 = (50, 150, 255)
+COLOR_ROLE_3 = (50, 255, 50)
+COLOR_TRAIL = (255, 120, 0)
+
+def recommended_duration(config: dict) -> float:
+    return 15.0
+
+def evaluate_point(t):
+    r = 1.0
+    k = 4.0
+    x = r * (k + 1) * np.cos(t) - r * np.cos((k + 1) * t)
+    y = r * (k + 1) * np.sin(t) - r * np.sin((k + 1) * t)
+  
+
+--- random_walk ---
+Equation: dx = \sqrt{2D}\, dW_x, \quad dy = \sqrt{2D}\, dW_y
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend import xp
+
+COLOR_ROLE_1 = (255, 50, 50)
+COLOR_ROLE_2 = (50, 150, 255)
+COLOR_ROLE_3 = (50, 255, 50)
+COLOR_TRAIL = (255, 120, 0)
+
+def recommended_duration(config: dict) -> float:
+    return 15.0
+
+def simulate_headless(config: dict):
+    duration = config.get("duration", 15.0)
+    fps = config.get("fps", 30)
+    
+    num_particles = 100
+
+--- standing_wave ---
+Equation: y(x,t) = \sin(kx - \omega t) + \sin(kx + \omega t)
+Code Snippet:
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+COLOR_WAVE1 = "#FF7F50"
+COLOR_WAVE2 = "#4169E1"
+COLOR_SUM = "#32FF32"
+
+def recommended_duration(config: dict) -> float:
+    return 15.0
+
+def evaluate_point(t):
+    x_antinode = np.pi / 2.0
+    x_node = np.pi
+    y_anti = np.sin(x_antinode - t) + np.sin(x_antinode + t)
+    y_node = np.sin(x_node - t) + np.sin(x_node + t)
+    return {"y_antinode": 
+

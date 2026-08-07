@@ -1,0 +1,5 @@
+title: Spirograph Hypotrochoid
+equation: x = (R-r)\cos\theta + d\cos\!\left(\frac{R-r}{r}\theta\right)
+simulation: spirograph
+
+fps: 30

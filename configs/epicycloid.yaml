@@ -1,0 +1,4 @@
+equation: x(t) = r(k+1)\cos(t) - r\cos((k+1)t), \quad y(t) = r(k+1)\sin(t) - r\sin((k+1)t)
+fps: 30
+simulation: epicycloid
+title: Epicycloid

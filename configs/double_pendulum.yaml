@@ -1,0 +1,9 @@
+title: Chaotic Double Pendulum
+equation: \ddot{\theta}_1 = f(\theta_1, \theta_2)
+simulation: double_pendulum
+
+fps: 30
+
+dt_divider: 10
+trail_color: gradient
+particle_color: white

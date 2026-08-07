@@ -1,0 +1,5 @@
+title: Lorenz Attractor
+equation: \dot{x} = \sigma(y-x), \; \dot{y} = x(\rho-z)-y, \; \dot{z} = xy-\beta z
+simulation: lorenz
+
+fps: 30

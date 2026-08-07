@@ -1,0 +1,6 @@
+title: Mandelbrot Set Zoom
+equation: z_{n+1} = z_n^2 + c
+simulation: mandelbrot
+
+fps: 3
+duration: 1

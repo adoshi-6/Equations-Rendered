@@ -1,0 +1,5 @@
+title: Pipeline Test (Dummy)
+equation: \ddot{\theta}_1 = f(\theta_1, \theta_2)
+simulation: dummy
+
+fps: 30

@@ -1,0 +1,5 @@
+title: Gravitational Three-Body
+equation: \ddot{q}_i = -G \sum_{j \neq i} m_j \frac{q_i - q_j}{|q_i - q_j|^3}
+simulation: three_body
+
+fps: 30

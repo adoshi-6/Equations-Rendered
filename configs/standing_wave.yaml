@@ -1,0 +1,4 @@
+equation: y(x,t) = \sin(x - t) + \sin(x + t)
+fps: 30
+simulation: standing_wave
+title: Standing Wave

@@ -1,0 +1,5 @@
+title: Logistic Map Bifurcation
+equation: x_{n+1} = r x_n (1 - x_n)
+simulation: logistic_map
+
+fps: 30

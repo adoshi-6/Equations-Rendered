@@ -1,0 +1,5 @@
+duration: 15.0
+equation: z_{n+1} = z_n^2 + c
+fps: 30
+simulation: julia
+title: Julia Set Zoom

@@ -1,0 +1,4 @@
+equation: \theta_{n+1} = \theta_n - \alpha \, \mathrm{clip}(\nabla f(\theta_n))
+fps: 30
+simulation: gradient_descent
+title: Gradient Descent

@@ -1,0 +1,5 @@
+title: Electric Field Lines
+equation: \vec{E} = \frac{1}{4\pi\epsilon_0} \sum_i q_i \frac{\vec{r} - \vec{r}_i}{|\vec{r} - \vec{r}_i|^3}
+simulation: electric_field
+
+fps: 30

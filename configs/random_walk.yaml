@@ -1,0 +1,5 @@
+simulation: "random_walk"
+title: "Random Walk"
+equation: "dx = \\sqrt{2D}\\, dW_x, \\quad dy = \\sqrt{2D}\\, dW_y"
+duration: 15.0
+fps: 30

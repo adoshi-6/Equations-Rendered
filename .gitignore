@@ -1,0 +1,6 @@
+*.mp4
+*.png
+*.jpg
+temp_render_*/
+output/
+__pycache__/

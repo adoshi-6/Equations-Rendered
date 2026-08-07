@@ -1,0 +1,4 @@
+equation: dx/dt = -y-z, \quad dy/dt = x+ay, \quad dz/dt = b+z(x-c)
+fps: 30
+simulation: rossler
+title: Rossler Attractor

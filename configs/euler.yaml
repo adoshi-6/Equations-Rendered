@@ -1,0 +1,6 @@
+title: Euler's Formula
+equation: e^{it} = \cos(t) + i\sin(t)
+simulation: euler
+
+fps: 30
+duration: 12
