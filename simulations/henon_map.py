@@ -55,15 +55,16 @@ def simulate_headless(config: dict):
     
     states = []
     
-    for f in range(num_frames):
-        for _ in range(iters_per_frame):
-            x_new = 1.0 - a * x**2 + y
-            y_new = b * x
-            x, y = x_new, y_new
+    def frame_generator():
+        for f in range(num_frames):
+            for _ in range(iters_per_frame):
+                x_new = 1.0 - a * x**2 + y
+                y_new = b * x
+                x, y = x_new, y_new
         
-        xc = x.get() if hasattr(x, "get") else np.asarray(x)
-        yc = y.get() if hasattr(y, "get") else np.asarray(y)
-        states.append(np.stack([xc, yc], axis=-1))
+            xc = x.get() if hasattr(x, "get") else np.asarray(x)
+            yc = y.get() if hasattr(y, "get") else np.asarray(y)
+            states.append(np.stack([xc, yc], axis=-1))
         
     return np.arange(num_frames), states
 
@@ -99,72 +100,73 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     num_trajectories = 1200
     warmup_iters = 180
     plot_iters = 100
-    
-    frames = []
     variable_logs = []
     
     x_min, x_max = -1.5, 1.5
     y_min, y_max = -0.45, 0.45
     
-    print("Generating Hénon Map sweep frames...")
-    
-    for f in range(num_frames):
-        t = f / max(1, num_frames - 1)
-        a = a_start + t * (a_end - a_start)
+    def frame_generator():
+        print("Generating Hénon Map sweep frames...")
         
-        # Log variable
-        variable_logs.append({
-            "Parameter a": f"{a:.3f}",
-            "Parameter b": f"{b:.1f}"
-        })
-        
-        xp.random.seed(42)
-        x_st = xp.random.uniform(-0.5, 0.5, (num_trajectories,))
-        y_st = xp.random.uniform(-0.1, 0.1, (num_trajectories,))
-        
-        for _ in range(warmup_iters):
-            x_next = 1.0 - a * x_st**2 + y_st
-            y_st = b * x_st
-            x_st = x_next
+        for f in range(num_frames):
+            nonlocal a_start, a_end, b
             
-        xs = xp.zeros((plot_iters, num_trajectories))
-        ys = xp.zeros((plot_iters, num_trajectories))
-        
-        for k in range(plot_iters):
-            x_next = 1.0 - a * x_st**2 + y_st
-            y_st = b * x_st
-            x_st = x_next
-            xs[k] = x_st
-            ys[k] = y_st
+            t = f / max(1, num_frames - 1)
+            a = a_start + t * (a_end - a_start)
             
-        all_x = xs.flatten()
-        all_y = ys.flatten()
-        
-        grid = xp.zeros((height, width), dtype=xp.float32)
-        
-        px = ((all_x - x_min) / (x_max - x_min) * width).astype(xp.int32)
-        py = ((y_max - all_y) / (y_max - y_min) * height).astype(xp.int32) 
-        
-        valid = (px >= 0) & (px < width) & (py >= 0) & (py < height)
-        
-        xp.add.at(grid, (py[valid], px[valid]), 1.0)
-        
-        max_val = xp.max(grid)
-        if max_val > 0:
-            grid = xp.log1p(grid) / xp.log1p(max_val)
+            # Log variable
+            variable_logs.append({
+                "Parameter a": f"{a:.3f}",
+                "Parameter b": f"{b:.1f}"
+            })
             
-        active_pixels = grid > 0.005
-        
-        color_grid = get_gradient_color(grid, active_pixels)
-        
-        if hasattr(color_grid, "get"):
-            frame = color_grid.get()
-        else:
-            frame = np.asarray(color_grid)
+            xp.random.seed(42)
+            x_st = xp.random.uniform(-0.5, 0.5, (num_trajectories,))
+            y_st = xp.random.uniform(-0.1, 0.1, (num_trajectories,))
             
-        frames.append(frame)
-        
-        if (f + 1) % 30 == 0:
-            print(f"Processed frame {f + 1}/{num_frames}...")
+            for _ in range(warmup_iters):
+                x_next = 1.0 - a * x_st**2 + y_st
+                y_st = b * x_st
+                x_st = x_next
+                
+            xs = xp.zeros((plot_iters, num_trajectories))
+            ys = xp.zeros((plot_iters, num_trajectories))
             
-    return frames, variable_logs
+            for k in range(plot_iters):
+                x_next = 1.0 - a * x_st**2 + y_st
+                y_st = b * x_st
+                x_st = x_next
+                xs[k] = x_st
+                ys[k] = y_st
+                
+            all_x = xs.flatten()
+            all_y = ys.flatten()
+            
+            grid = xp.zeros((height, width), dtype=xp.float32)
+            
+            px = ((all_x - x_min) / (x_max - x_min) * width).astype(xp.int32)
+            py = ((y_max - all_y) / (y_max - y_min) * height).astype(xp.int32) 
+            
+            valid = (px >= 0) & (px < width) & (py >= 0) & (py < height)
+            
+            xp.add.at(grid, (py[valid], px[valid]), 1.0)
+            
+            max_val = xp.max(grid)
+            if max_val > 0:
+                grid = xp.log1p(grid) / xp.log1p(max_val)
+                
+            active_pixels = grid > 0.005
+            
+            color_grid = get_gradient_color(grid, active_pixels)
+            
+            if hasattr(color_grid, "get"):
+                frame = color_grid.get()
+            else:
+                frame = np.asarray(color_grid)
+                
+            yield frame
+            
+            if (f + 1) % 30 == 0:
+                print(f"Processed frame {f + 1}/{num_frames}...")
+            
+    return frame_generator(), variable_logs, None

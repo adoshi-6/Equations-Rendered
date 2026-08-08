@@ -18,11 +18,11 @@ def himmelblau_grad(x, y):
     dfdy = 2.0 * (x**2 + y - 11.0) + 4.0 * y * (x + y**2 - 7.0)
     return dfdx, dfdy
 
-# Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
-COLOR_TRAIL = (255, 120, 0)      # Orange
+# Universal Palette (Priority 5 - Desaturated to match ROLE_COLORS)
+COLOR_ROLE_1 = (232, 93, 74)     # Primary (#E85D4A)
+COLOR_ROLE_2 = (93, 168, 232)    # Secondary (#5DA8E8)
+COLOR_ROLE_3 = (127, 174, 107)   # Auxiliary (#7FAE6B)
+COLOR_TRAIL = (232, 93, 74)      # Match primary for trails if used
 
 def run_optimization(config):
     # run gradient descent on a single point to find minimum
@@ -136,62 +136,112 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
 
     trail_history = []
     max_trail_len = 120
-
-    frames = []
     variable_logs = []
 
     print("Generating Gradient Descent frames...")
 
-    for f in range(num_frames):
-        gx, gy = himmelblau_grad(px, py)
-        mag = xp.sqrt(gx**2 + gy**2) + 1e-8
+    def frame_generator():
+        nonlocal px, py
+        for f in range(num_frames):
+            gx, gy = himmelblau_grad(px, py)
+            mag = xp.sqrt(gx**2 + gy**2) + 1e-8
         
-        # Log variables
-        mean_loss = float(xp.mean(himmelblau(px, py)))
-        mean_grad = float(xp.mean(mag))
-        variable_logs.append({
-            "Avg Loss": f"{mean_loss:.2f}",
-            "Avg Gradient": f"{mean_grad:.2f}"
-        })
+            # Log variables using Priority 1 roles
+            mean_loss = float(xp.mean(himmelblau(px, py)))
+            mean_grad = float(xp.mean(mag))
+            variable_logs.append([
+                {"name": "Avg Loss", "value": f"{mean_loss:.2f}", "role": "metric", "metric_index": 0},
+                {"name": "Avg Gradient", "value": f"{mean_grad:.2f}", "role": "metric", "metric_index": 1},
+                {"name": "Clip Bound", "value": "5.0", "role": "control"}
+            ])
         
-        scale = xp.minimum(mag, 5.0) / mag
-        px = px - learning_rate * gx * scale
-        py = py - learning_rate * gy * scale
+            scale = xp.minimum(mag, 5.0) / mag
+            px = px - learning_rate * gx * scale
+            py = py - learning_rate * gy * scale
 
-        if hasattr(px, "get"):
-            px_cpu, py_cpu = px.get(), py.get()
-        else:
-            px_cpu, py_cpu = np.asarray(px), np.asarray(py)
+            if hasattr(px, "get"):
+                px_cpu, py_cpu = px.get(), py.get()
+            else:
+                px_cpu, py_cpu = np.asarray(px), np.asarray(py)
 
-        sx, sy = to_pixel(px_cpu, py_cpu)
+            sx, sy = to_pixel(px_cpu, py_cpu)
 
-        trail_history.append((sx.copy(), sy.copy()))
-        if len(trail_history) > max_trail_len:
-            trail_history.pop(0)
+            trail_history.append((sx.copy(), sy.copy()))
+            if len(trail_history) > max_trail_len:
+                trail_history.pop(0)
 
-        img = Image.fromarray(bg_cpu.copy(), "RGB").convert("RGBA")
-        draw = ImageDraw.Draw(img)
+            img = Image.fromarray(bg_cpu.copy(), "RGB").convert("RGBA")
+            draw = ImageDraw.Draw(img)
 
-        history_len = len(trail_history)
-        if history_len > 1:
-            for h in range(1, history_len):
-                opacity = int(100 * (h / history_len) ** 1.5)
-                prev_sx, prev_sy = trail_history[h - 1]
-                curr_sx, curr_sy = trail_history[h]
-                for i in range(num_particles):
-                    col = particle_color(i, num_particles)
-                    draw.line(
-                        [(prev_sx[i], prev_sy[i]), (curr_sx[i], curr_sy[i])],
-                        fill=col + (opacity,), width=2
-                    )
+            history_len = len(trail_history)
+            if history_len > 1:
+                for h in range(1, history_len):
+                    opacity = int(100 * (h / history_len) ** 1.5)
+                    prev_sx, prev_sy = trail_history[h - 1]
+                    curr_sx, curr_sy = trail_history[h]
+                    for i in range(num_particles):
+                        col = particle_color(i, num_particles)
+                        draw.line(
+                            [(prev_sx[i], prev_sy[i]), (curr_sx[i], curr_sy[i])],
+                            fill=col + (opacity,), width=2
+                        )
 
-        for i in range(num_particles):
-            col = particle_color(i, num_particles)
-            draw.ellipse([sx[i]-4, sy[i]-4, sx[i]+4, sy[i]+4], fill=col + (255,))
+            for i in range(num_particles):
+                col = particle_color(i, num_particles)
+                draw.ellipse([sx[i]-4, sy[i]-4, sx[i]+4, sy[i]+4], fill=col + (255,))
 
-        frames.append(np.array(img.convert("RGB")))
+            yield np.array(img.convert("RGB"))
 
-        if (f + 1) % 30 == 0:
-            print(f"  Frame {f + 1}/{num_frames}")
+            if (f + 1) % 30 == 0:
+                print(f"  Frame {f + 1}/{num_frames}")
 
-    return frames, variable_logs
+    # Pedagogical annotations: Anchor to the first particle's starting position
+    # and explicitly draw its gradient vector being clipped by the boundary.
+    if hasattr(px, "get"):
+        px0, py0 = float(px.get()[0]), float(py.get()[0])
+    else:
+        px0, py0 = float(px[0]), float(py[0])
+    sx0, sy0 = to_pixel(px0, py0)
+    
+    gx, gy = himmelblau_grad(px0, py0)
+    
+    # Scale factor for visualization of the gradient space (pixels per unit of gradient)
+    # The gradient magnitude starts around ~40-60.
+    grad_vis_scale = 3.0
+    
+    # Unclipped gradient vector visualization
+    # Pixel y-axis goes DOWN, while physical y-axis goes UP.
+    # Gradient descent moves in -grad direction, so we visualize the negative gradient.
+    end_x_unclipped = sx0 - gx * grad_vis_scale
+    end_y_unclipped = sy0 + gy * grad_vis_scale 
+    
+    # Clipped gradient vector
+    mag = np.sqrt(gx**2 + gy**2)
+    scale = min(mag, 5.0) / mag
+    end_x_clipped = sx0 - (gx * scale) * grad_vis_scale
+    end_y_clipped = sy0 + (gy * scale) * grad_vis_scale
+    
+    clip_radius_px = 5.0 * grad_vis_scale
+    
+    annotations = [
+        {
+            "type": "circle",
+            "coords": [sx0, sy0, clip_radius_px],
+            "label": "Clip Bound (5.0)",
+            "color": "control"
+        },
+        {
+            "type": "line",
+            "coords": [sx0, sy0, end_x_unclipped, end_y_unclipped],
+            "label": "Raw ∇f",
+            "color": "secondary"
+        },
+        {
+            "type": "line",
+            "coords": [sx0, sy0, end_x_clipped, end_y_clipped],
+            "label": "Clipped Step",
+            "color": "primary"
+        }
+    ]
+
+    return frame_generator(), variable_logs, None, annotations

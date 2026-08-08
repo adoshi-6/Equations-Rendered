@@ -45,3 +45,40 @@ def compile_video(frame_pattern: str, audio_path: str | None, output_path: str, 
         )
     else:
         print(f"Successfully compiled video to {output_path}")
+
+def start_ffmpeg_process(output_path: str, fps: int = 30, audio_path: str | None = None, width: int = 1080, height: int = 1920) -> subprocess.Popen:
+    """
+    Starts an FFmpeg process configured to read raw RGB frames from stdin.
+    Returns the Popen object so frames can be piped into process.stdin.write(raw_bytes).
+    """
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        
+    cmd = [
+        "ffmpeg", "-y", 
+        "-f", "rawvideo", 
+        "-vcodec", "rawvideo", 
+        "-s", f"{width}x{height}", 
+        "-pix_fmt", "rgb24", 
+        "-framerate", str(fps), 
+        "-i", "-"
+    ]
+    
+    if audio_path and os.path.exists(audio_path):
+        cmd.extend(["-stream_loop", "-1", "-i", audio_path, "-map", "0:v:0", "-map", "1:a:0", "-shortest"])
+    else:
+        cmd.extend(["-map", "0:v:0"])
+        
+    cmd.extend([
+        "-loglevel", "error",  # Reduce output to prevent pipe blocking
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        output_path
+    ])
+    
+    log_file_path = output_path + ".ffmpeg.log"
+    log_file = open(log_file_path, "w")
+    print(f"Starting ffmpeg stream: {' '.join(cmd)}")
+    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log_file)

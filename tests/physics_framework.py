@@ -12,6 +12,69 @@ def test_conservation(module, config, conserved_quantities, tolerance=0.1):
         results[qty] = {"start": val_start, "end": val_end, "drift": drift, "passed": passed}
     return results
 
+def test_trend_assertions(module, config, assertions):
+    """
+    Verifies that certain metrics trend in expected directions over the course of the simulation.
+    E.g. monotonic_increase, monotonic_decrease
+    """
+    try:
+        # Use generate() to get variables logs since simulate_headless might not return them
+        sim_output = module.generate(config)
+        if isinstance(sim_output, tuple):
+            if len(sim_output) == 3:
+                _, variable_logs, _ = sim_output
+            elif len(sim_output) == 2:
+                _, variable_logs = sim_output
+        else:
+            return {"error": "Module generate() did not return variable_logs", "passed": False}
+    except Exception as e:
+        return {"error": str(e), "passed": False}
+        
+    results = {}
+    overall_passed = True
+    
+    for var_name, expected_trend in assertions.items():
+        var_values = []
+        for log in variable_logs:
+            if var_name in log:
+                try:
+                    var_values.append(float(log[var_name]))
+                except ValueError:
+                    pass
+                    
+        if not var_values:
+            results[var_name] = {"passed": False, "error": f"Variable '{var_name}' not found in logs"}
+            overall_passed = False
+            continue
+            
+        passed = True
+        
+        # sample at 10%, 50%, 90%
+        idx1 = max(0, int(len(var_values) * 0.1))
+        idx2 = max(0, int(len(var_values) * 0.5))
+        idx3 = max(0, int(len(var_values) * 0.9))
+        
+        v1, v2, v3 = var_values[idx1], var_values[idx2], var_values[idx3]
+        
+        if expected_trend == "monotonic_increase":
+            if not (v1 <= v2 <= v3) or (v1 == v3 and v1 != 0): # Needs to grow, not stay flat (unless 0)
+                passed = False
+        elif expected_trend == "monotonic_decrease":
+            if not (v1 >= v2 >= v3):
+                passed = False
+                
+        results[var_name] = {
+            "expected": expected_trend,
+            "v1": v1, "v2": v2, "v3": v3,
+            "passed": passed
+        }
+        if not passed:
+            overall_passed = False
+            
+    results["overall_passed"] = overall_passed
+    return results
+
+
 def test_bounded_region(module, config, expected_bounds):
     t_array, states = module.simulate_headless(config)
     results = {}

@@ -222,61 +222,62 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     trail_history = []
     max_trail_len = 90
     
-    frames = []
     variable_logs = []
     
-    t_curr = 0.0
-    for f in range(num_frames):
-        for _ in range(n_substeps):
-            state = rk4_step(three_body_derivs, state, t_curr, dt, m1, m2, m3, G)
-            t_curr += dt
-            
-        st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
-        
-        x1, y1 = st_cpu[:, 0], st_cpu[:, 1]
-        x2, y2 = st_cpu[:, 4], st_cpu[:, 5]
-        x3, y3 = st_cpu[:, 8], st_cpu[:, 9]
-        
-        # Log divergence metric
-        std_dev = float(np.std(x1))
-        variable_logs.append({
-            "Divergence (σ)": f"{std_dev:.4f}"
-        })
-        
-        px1, py1 = center_x + x1 * scale, center_y - y1 * scale
-        px2, py2 = center_x + x2 * scale, center_y - y2 * scale
-        px3, py3 = center_x + x3 * scale, center_y - y3 * scale
-        
-        trail_history.append((px1.copy(), py1.copy(), px2.copy(), py2.copy(), px3.copy(), py3.copy()))
-        if len(trail_history) > max_trail_len:
-            trail_history.pop(0)
-            
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
-        
-        history_len = len(trail_history)
-        if history_len > 1:
-            for h in range(1, history_len):
-                opacity_factor = h / history_len
-                alpha = int(120 * opacity_factor**1.8)
+    def frame_generator():
+        t_curr = 0.0
+        for f in range(num_frames):
+            nonlocal state
+            for _ in range(n_substeps):
+                state = rk4_step(three_body_derivs, state, t_curr, dt, m1, m2, m3, G)
+                t_curr += dt
                 
-                p1x, p1y, p2x, p2y, p3x, p3y = trail_history[h-1]
-                c1x, c1y, c2x, c2y, c3x, c3y = trail_history[h]
+            st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
+            
+            x1, y1 = st_cpu[:, 0], st_cpu[:, 1]
+            x2, y2 = st_cpu[:, 4], st_cpu[:, 5]
+            x3, y3 = st_cpu[:, 8], st_cpu[:, 9]
+            
+            # Log divergence metric
+            std_dev = float(np.std(x1))
+            variable_logs.append({
+                "Divergence (σ)": f"{std_dev:.4f}"
+            })
+            
+            px1, py1 = center_x + x1 * scale, center_y - y1 * scale
+            px2, py2 = center_x + x2 * scale, center_y - y2 * scale
+            px3, py3 = center_x + x3 * scale, center_y - y3 * scale
+            
+            trail_history.append((px1.copy(), py1.copy(), px2.copy(), py2.copy(), px3.copy(), py3.copy()))
+            if len(trail_history) > max_trail_len:
+                trail_history.pop(0)
                 
-                for i in range(num_trajectories):
-                    draw.line([(p1x[i], p1y[i]), (c1x[i], c1y[i])], fill=COLOR_ROLE_1 + (alpha,), width=2)
-                    draw.line([(p2x[i], p2y[i]), (c2x[i], c2y[i])], fill=COLOR_ROLE_2 + (alpha,), width=2)
-                    draw.line([(p3x[i], p3y[i]), (c3x[i], c3y[i])], fill=COLOR_ROLE_3 + (alpha,), width=2)
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
+            
+            history_len = len(trail_history)
+            if history_len > 1:
+                for h in range(1, history_len):
+                    opacity_factor = h / history_len
+                    alpha = int(120 * opacity_factor**1.8)
                     
-        for i in range(num_trajectories):
-            draw.ellipse([px1[i]-2, py1[i]-2, px1[i]+2, py1[i]+2], fill=COLOR_ROLE_1 + (255,))
-            draw.ellipse([px2[i]-2, py2[i]-2, px2[i]+2, py2[i]+2], fill=COLOR_ROLE_2 + (255,))
-            draw.ellipse([px3[i]-2, py3[i]-2, px3[i]+2, py3[i]+2], fill=COLOR_ROLE_3 + (255,))
+                    p1x, p1y, p2x, p2y, p3x, p3y = trail_history[h-1]
+                    c1x, c1y, c2x, c2y, c3x, c3y = trail_history[h]
+                    
+                    for i in range(num_trajectories):
+                        draw.line([(p1x[i], p1y[i]), (c1x[i], c1y[i])], fill=COLOR_ROLE_1 + (alpha,), width=2)
+                        draw.line([(p2x[i], p2y[i]), (c2x[i], c2y[i])], fill=COLOR_ROLE_2 + (alpha,), width=2)
+                        draw.line([(p3x[i], p3y[i]), (c3x[i], c3y[i])], fill=COLOR_ROLE_3 + (alpha,), width=2)
+                        
+            for i in range(num_trajectories):
+                draw.ellipse([px1[i]-2, py1[i]-2, px1[i]+2, py1[i]+2], fill=COLOR_ROLE_1 + (255,))
+                draw.ellipse([px2[i]-2, py2[i]-2, px2[i]+2, py2[i]+2], fill=COLOR_ROLE_2 + (255,))
+                draw.ellipse([px3[i]-2, py3[i]-2, px3[i]+2, py3[i]+2], fill=COLOR_ROLE_3 + (255,))
+                
+            draw.ellipse([px1[0]-8, py1[0]-8, px1[0]+8, py1[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
+            draw.ellipse([px2[0]-8, py2[0]-8, px2[0]+8, py2[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_2 + (255,), width=2)
+            draw.ellipse([px3[0]-8, py3[0]-8, px3[0]+8, py3[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_3 + (255,), width=2)
             
-        draw.ellipse([px1[0]-8, py1[0]-8, px1[0]+8, py1[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
-        draw.ellipse([px2[0]-8, py2[0]-8, px2[0]+8, py2[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_2 + (255,), width=2)
-        draw.ellipse([px3[0]-8, py3[0]-8, px3[0]+8, py3[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_3 + (255,), width=2)
-        
-        frames.append(np.array(img.convert("RGB")))
-        
-    return frames, variable_logs
+            yield np.array(img.convert("RGB"))
+            
+    return frame_generator(), variable_logs, None

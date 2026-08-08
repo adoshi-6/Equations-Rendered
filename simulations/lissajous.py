@@ -66,45 +66,44 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     num_curves = 100
     num_points = 600
     t = xp.linspace(0, 2.0 * xp.pi, num_points)
-    
-    frames = []
     variable_logs = []
     
     print("Generating Lissajous curve frames...")
     
-    for f in range(num_frames):
-        base_delta = 2.0 * xp.pi * (f / max(1, num_frames - 1))
+    def frame_generator():
+        for f in range(num_frames):
+            base_delta = 2.0 * xp.pi * (f / max(1, num_frames - 1))
         
-        # Log variable
-        variable_logs.append({
-            "Phase (δ)": f"{base_delta:.2f} rad",
-            "Ratio ω_x/ω_y": f"{freq_x}/{freq_y}"
-        })
+            # Log variable
+            variable_logs.append({
+                "Phase (δ)": f"{base_delta:.2f} rad",
+                "Ratio ω_x/ω_y": f"{freq_x}/{freq_y}"
+            })
         
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
         
-        delta = base_delta + xp.linspace(-0.25, 0.25, num_curves)[:, None]
+            delta = base_delta + xp.linspace(-0.25, 0.25, num_curves)[:, None]
         
-        x_coords = xp.sin(freq_x * t[None, :] + delta)
-        y_coords = xp.sin(freq_y * t[None, :]) * xp.ones((num_curves, 1))
+            x_coords = xp.sin(freq_x * t[None, :] + delta)
+            y_coords = xp.sin(freq_y * t[None, :]) * xp.ones((num_curves, 1))
         
-        px = (center_x + x_coords * scale)
-        py = (center_y - y_coords * scale)
+            px = (center_x + x_coords * scale)
+            py = (center_y - y_coords * scale)
         
-        if hasattr(px, "get"):
-            px_cpu = px.get()
-            py_cpu = py.get()
-        else:
-            px_cpu = np.asarray(px)
-            py_cpu = np.asarray(py)
+            if hasattr(px, "get"):
+                px_cpu = px.get()
+                py_cpu = py.get()
+            else:
+                px_cpu = np.asarray(px)
+                py_cpu = np.asarray(py)
             
-        for i in range(num_curves):
-            color = get_gradient_color(i, num_curves)
+            for i in range(num_curves):
+                color = get_gradient_color(i, num_curves)
             
-            pts = [(px_cpu[i, k], py_cpu[i, k]) for k in range(num_points)]
-            draw.line(pts, fill=color + (40,), width=2)
+                pts = [(px_cpu[i, k], py_cpu[i, k]) for k in range(num_points)]
+                draw.line(pts, fill=color + (40,), width=2)
             
-        frames.append(np.array(img.convert("RGB")))
+            yield np.array(img.convert("RGB"))
         
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

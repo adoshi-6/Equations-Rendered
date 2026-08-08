@@ -8,9 +8,9 @@ from drawing_utils import draw_hatching, draw_spring, draw_mass
 
 COLOR_BG = (0, 0, 0)
 COLOR_AXIS = (100, 100, 100)
-COLOR_VECTOR = (255, 255, 255)
-COLOR_RE = "#FF7F50" # Coral
-COLOR_IM = "#4169E1" # Cool Blue
+COLOR_VECTOR = (127, 174, 107) # Auxiliary
+COLOR_RE = "#E85D4A" # Primary
+COLOR_IM = "#5DA8E8" # Secondary
 
 def recommended_duration(config: dict) -> float:
     return 12.0 # Fixed duration for Euler's formula demonstration
@@ -30,7 +30,7 @@ def generate(config: dict):
     
     # 2. Render frames
     w, h = 1080, 1080
-    frames = []
+    variable_logs = []
     logs = []
     
     cx, cy = w // 2, h // 2
@@ -51,34 +51,38 @@ def generate(config: dict):
     # We'll put a fixed wall at the left
     draw_hatching(draw_bg, (cx - 400, cy - 100), (cx - 400, cy + 100), normal_dir=(1, 0), color=COLOR_AXIS)
     
-    for i in range(num_frames):
-        t = t_array[i]
-        frame_img = bg.copy()
-        draw = ImageDraw.Draw(frame_img)
+    def frame_generator():
+        for i in range(num_frames):
+            t = t_array[i]
+            frame_img = bg.copy()
+            draw = ImageDraw.Draw(frame_img)
         
-        # Current position
-        px = cx + int(re_array[i] * radius)
-        py = cy - int(im_array[i] * radius) # -y is up in PIL
+            # Current position
+            px = cx + int(re_array[i] * radius)
+            py = cy - int(im_array[i] * radius) # -y is up in PIL
         
-        # Draw spring from left wall to the mass
-        draw_spring(draw, (cx - 400, cy), (px, py), num_coils=8, color=(150, 150, 150))
+            # Draw spring from left wall to the mass
+            draw_spring(draw, (cx - 400, cy), (px, py), num_coils=8, color=(150, 150, 150))
         
-        # Draw vector
-        draw.line([(cx, cy), (px, py)], fill=COLOR_VECTOR, width=4)
+            # Draw vector
+            draw.line([(cx, cy), (px, py)], fill=COLOR_VECTOR, width=4)
         
-        # Draw mass box at the end
-        draw_mass(draw, (px, py), (40, 40), color=COLOR_VECTOR, outline=None)
+            # Draw mass box at the end
+            draw_mass(draw, (px, py), (40, 40), color=COLOR_VECTOR, outline=None)
         
-        # Draw projections
-        draw.line([(px, py), (px, cy)], fill=COLOR_IM, width=2) # vertical (Im)
-        draw.line([(px, py), (cx, py)], fill=COLOR_RE, width=2) # horizontal (Re)
+            # Draw projections
+            draw.line([(px, py), (px, cy)], fill=COLOR_IM, width=2) # vertical (Im)
+            draw.line([(px, py), (cx, py)], fill=COLOR_RE, width=2) # horizontal (Re)
         
-        frames.append(np.array(frame_img))
-        logs.append({
-            "t": f"{t:.2f}",
-            "Re": f"{re_array[i]:.2f}",
-            "Im": f"{im_array[i]:.2f}"
-        })
+            yield np.array(frame_img)
+            
+    logs = []
+    for i, (t, re, im) in enumerate(zip(t_array, re_array, im_array)):
+        logs.append([
+            {"name": "Angle", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
+            {"name": "Re", "value": f"{re:.2f}", "role": "metric", "metric_index": 1},
+            {"name": "Im", "value": f"{im:.2f}", "role": "metric", "metric_index": 2}
+        ])
         
     auxiliary_curves = {
         "time": t_array,
@@ -90,4 +94,4 @@ def generate(config: dict):
         "ylabel": "Amplitude"
     }
         
-    return frames, logs, auxiliary_curves
+    return frame_generator(), logs, auxiliary_curves

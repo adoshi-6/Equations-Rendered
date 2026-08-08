@@ -87,52 +87,51 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     else:
         px_full_cpu = np.asarray(px_full)
         py_full_cpu = np.asarray(py_full)
-        
-    frames = []
     variable_logs = []
     
     print("Generating Spirograph frames...")
     
-    for f in range(num_frames):
-        progress = f / max(1, num_frames - 1)
-        current_idx = int(progress * (num_points_full - 1))
+    def frame_generator():
+        for f in range(num_frames):
+            progress = f / max(1, num_frames - 1)
+            current_idx = int(progress * (num_points_full - 1))
         
-        theta_t = progress * max_theta
+            theta_t = progress * max_theta
         
-        # Log variable
-        variable_logs.append({
-            "Rotor θ": f"{float(theta_t):.2f} rad",
-            "Ratio R/r": f"{R/r:.2f}"
-        })
+            # Log variable
+            variable_logs.append({
+                "Rotor θ": f"{float(theta_t):.2f} rad",
+                "Ratio R/r": f"{R/r:.2f}"
+            })
         
-        cx = center_x + (R - r) * np.cos(theta_t)
-        cy = center_y - (R - r) * np.sin(theta_t)
+            cx = center_x + (R - r) * np.cos(theta_t)
+            cy = center_y - (R - r) * np.sin(theta_t)
         
-        pen_x = cx + d * np.cos(ratio * theta_t)
-        pen_y = cy - d * np.sin(ratio * theta_t)
+            pen_x = cx + d * np.cos(ratio * theta_t)
+            pen_y = cy - d * np.sin(ratio * theta_t)
         
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
         
-        draw.ellipse([center_x - R, center_y - R, center_x + R, center_y + R], outline=(100, 100, 100, 255), width=2)
-        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(150, 150, 150, 255), width=1)
+            draw.ellipse([center_x - R, center_y - R, center_x + R, center_y + R], outline=(100, 100, 100, 255), width=2)
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(150, 150, 150, 255), width=1)
         
-        draw.line([(cx, cy), (pen_x, pen_y)], fill=(200, 200, 200, 255), width=2)
-        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(200, 200, 200, 255))
+            draw.line([(cx, cy), (pen_x, pen_y)], fill=(200, 200, 200, 255), width=2)
+            draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(200, 200, 200, 255))
         
-        if current_idx > 1:
-            for k in range(1, current_idx + 1):
-                p_norm = k / (num_points_full - 1)
-                color = get_gradient_color(p_norm)
+            if current_idx > 1:
+                for k in range(1, current_idx + 1):
+                    p_norm = k / (num_points_full - 1)
+                    color = get_gradient_color(p_norm)
                 
-                draw.line(
-                    [(px_full_cpu[k-1], py_full_cpu[k-1]), (px_full_cpu[k], py_full_cpu[k])],
-                    fill=color + (255,),
-                    width=3
-                )
+                    draw.line(
+                        [(px_full_cpu[k-1], py_full_cpu[k-1]), (px_full_cpu[k], py_full_cpu[k])],
+                        fill=color + (255,),
+                        width=3
+                    )
                 
-        draw.ellipse([pen_x - 5, pen_y - 5, pen_x + 5, pen_y + 5], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
+            draw.ellipse([pen_x - 5, pen_y - 5, pen_x + 5, pen_y + 5], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
         
-        frames.append(np.array(img.convert("RGB")))
+            yield np.array(img.convert("RGB"))
         
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

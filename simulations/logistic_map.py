@@ -87,61 +87,60 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     num_trajectories = 250
     transient_iters = 300
     plot_iters = 150
-    
-    frames = []
     variable_logs = []
     
     col_indices = xp.tile(xp.arange(width), (num_trajectories, 1))
     
     print("Generating Logistic Map zoom frames...")
     
-    for f in range(num_frames):
-        r_w = r_width_start * (zoom_r ** f)
-        x_h = x_height_start * (zoom_x ** f)
+    def frame_generator():
+        for f in range(num_frames):
+            r_w = r_width_start * (zoom_r ** f)
+            x_h = x_height_start * (zoom_x ** f)
         
-        # Log variable
-        zoom_level = 1.1 / r_w
-        variable_logs.append({
-            "Zoom Depth": f"{zoom_level:.1f}x",
-            "Viewport Δr": f"{r_w:.5f}"
-        })
+            # Log variable
+            zoom_level = 1.1 / r_w
+            variable_logs.append({
+                "Zoom Depth": f"{zoom_level:.1f}x",
+                "Viewport Δr": f"{r_w:.5f}"
+            })
         
-        r_min = r_center - r_w / 2.0
-        r_max = r_center + r_w / 2.0
-        x_min = x_center - x_h / 2.0
-        x_max = x_center + x_h / 2.0
+            r_min = r_center - r_w / 2.0
+            r_max = r_center + r_w / 2.0
+            x_min = x_center - x_h / 2.0
+            x_max = x_center + x_h / 2.0
         
-        r = xp.linspace(r_min, r_max, width)[None, :]
-        r = xp.clip(r, 0.0, 4.0)
+            r = xp.linspace(r_min, r_max, width)[None, :]
+            r = xp.clip(r, 0.0, 4.0)
         
-        x = xp.linspace(0.1, 0.9, num_trajectories)[:, None] * xp.ones((1, width))
+            x = xp.linspace(0.1, 0.9, num_trajectories)[:, None] * xp.ones((1, width))
         
-        for _ in range(transient_iters):
-            x = r * x * (1.0 - x)
+            for _ in range(transient_iters):
+                x = r * x * (1.0 - x)
             
-        density_grid = xp.zeros((height, width), dtype=xp.float32)
+            density_grid = xp.zeros((height, width), dtype=xp.float32)
         
-        for _ in range(plot_iters):
-            x = r * x * (1.0 - x)
+            for _ in range(plot_iters):
+                x = r * x * (1.0 - x)
             
-            y_px = ((x_max - x) / (x_max - x_min) * height).astype(xp.int32)
-            valid = (y_px >= 0) & (y_px < height)
-            xp.add.at(density_grid, (y_px[valid], col_indices[valid]), 1.0)
+                y_px = ((x_max - x) / (x_max - x_min) * height).astype(xp.int32)
+                valid = (y_px >= 0) & (y_px < height)
+                xp.add.at(density_grid, (y_px[valid], col_indices[valid]), 1.0)
             
-        max_val = xp.max(density_grid)
-        if max_val > 0:
-            density_grid = xp.log1p(density_grid) / xp.log1p(max_val)
+            max_val = xp.max(density_grid)
+            if max_val > 0:
+                density_grid = xp.log1p(density_grid) / xp.log1p(max_val)
             
-        color_grid = get_palette_color(density_grid)
+            color_grid = get_palette_color(density_grid)
         
-        if hasattr(color_grid, "get"):
-            frame = color_grid.get()
-        else:
-            frame = np.asarray(color_grid)
+            if hasattr(color_grid, "get"):
+                frame = color_grid.get()
+            else:
+                frame = np.asarray(color_grid)
             
-        frames.append(frame)
+            yield frame
         
-        if (f + 1) % 30 == 0:
-            print(f"Processed frame {f + 1}/{num_frames}...")
+            if (f + 1) % 30 == 0:
+                print(f"Processed frame {f + 1}/{num_frames}...")
             
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

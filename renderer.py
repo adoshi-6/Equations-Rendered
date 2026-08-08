@@ -4,6 +4,9 @@ import yaml
 import argparse
 import importlib
 import shutil
+import json
+import datetime
+import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 # Add current directory to path so imports work correctly
@@ -110,7 +113,7 @@ def render_equation_latex(equation: str, output_path: str) -> bool:
         print(f"PIL fallback rendering failed: {e3}")
         return False
 
-def render_video(config_path: str, output_path: str) -> None:
+def render_video(config_path: str, output_path: str, baseline_dir: str = None) -> None:
     """
     Orchestrates the entire rendering pipeline:
     1. Loads configuration.
@@ -142,30 +145,31 @@ def render_video(config_path: str, output_path: str) -> None:
         duration = base_duration
         
     duration = max(10.0, min(30.0, duration))
+    
+    # Apply tuning adjustment: +5s buffer AFTER plateau & clamp for chaotic ODEs
+    if sim_name in ["double_pendulum", "lorenz", "rossler", "three_body"]:
+        duration += 5.0
+        duration = min(30.0, duration)  # Ensure we still respect the 30s ceiling
+        
     config["duration"] = duration  # Update config so generate() uses the clamped duration
     fps = config.get("fps", 30)
         
     print(f"Running simulation: {sim_name} (Duration: {duration}s)...")
     sim_output = sim_module.generate(config)
     
-    auxiliary_curves = None
     if isinstance(sim_output, tuple):
         if len(sim_output) == 3:
-            sim_frames, variable_logs, auxiliary_curves = sim_output
-        elif len(sim_output) == 2:
-            sim_frames, variable_logs = sim_output
-            
-        if not sim_frames:
-            raise ValueError("Simulation returned an empty list of frames.")
+            frame_gen, variable_logs, auxiliary_curves = sim_output
+        elif len(sim_output) == 4:
+            frame_gen, variable_logs, auxiliary_curves, _ = sim_output
+        else:
+            raise ValueError("Simulation generate() must return 3 or 4 elements.")
     else:
-        sim_frames = sim_output
-        variable_logs = [{}] * len(sim_frames)
+        raise ValueError("Simulation generate() must return (frame_generator, variable_logs, auxiliary_curves_or_None, [annotations]).")
         
-    print(f"Simulation generated {len(sim_frames)} frames.")
+    num_frames = int(duration * fps)
+    print(f"Simulation will generate ~{num_frames} frames.")
     
-    if not sim_frames:
-        raise ValueError("Simulation returned an empty list of frames.")
-        
     # 2. Render the equation overlay PNG (unique temp dir per simulation to avoid collisions)
     temp_dir = os.path.join(os.path.dirname(output_path), f"temp_render_{sim_name}")
     if os.path.exists(temp_dir):
@@ -221,16 +225,57 @@ def render_video(config_path: str, output_path: str) -> None:
         aux_bg_img = Image.open(buf).convert("RGBA")
         plt.close(fig)
 
-    # 3. Composite frames
-    frames_dir = os.path.join(temp_dir, "frames")
-    os.makedirs(frames_dir, exist_ok=True)
+    # 3. Find audio track (if any) in assets/music before streaming
+    music_dir = "assets/music"
+    audio_path = None
+    if os.path.exists(music_dir):
+        music_files = [os.path.join(music_dir, f) for f in os.listdir(music_dir) 
+                       if f.lower().endswith(('.mp3', '.wav'))]
+        if music_files:
+            audio_path = music_files[0]
+            print(f"Found background audio: {audio_path}")
+
+    # 4. Start FFmpeg process for streaming
+    ffmpeg_process = ffmpeg.start_ffmpeg_process(output_path, fps=fps, audio_path=audio_path)
     
+    # 5. Composite frames dynamically
     title_font = load_font(84)
     readout_font = load_font(42)
     curve_font = load_italic_font(32)
+    annotation_font = load_italic_font(28)
     
-    print("Compositing frames...")
-    for i, frame in enumerate(sim_frames):
+    ROLE_COLORS = {
+        "primary": "#E85D4A",      # soft red — main trajectory/body
+        "secondary": "#5DA8E8",    # powder blue — comparison trajectory
+        "auxiliary": "#7FAE6B",    # sage green — derived/aux curve
+        "control": "#D4C24A",      # muted yellow — tunable parameter
+        "static": "#CFCFCF",       # off-white — fixed parameter
+    }
+    
+    METRIC_COLORS = [
+        "#E86B5D",  # coral — metric 0
+        "#B87FC9",  # dusty purple — metric 1
+        "#C97FA0",  # muted rose — metric 2 (if needed)
+        "#7FC9B0",  # muted teal — metric 3 (if needed)
+    ]
+    
+    # Check if annotations are returned
+    annotations = None
+    if isinstance(sim_output, tuple) and len(sim_output) == 4:
+        annotations = sim_output[3]
+    
+    # Pre-calculate bounding boxes for provenance
+    provenance_bboxes = {}
+    
+    print("Streaming and compositing frames...")
+    
+    start_idx = max(0, int(num_frames * 0.1))
+    mid_idx = max(0, int(num_frames * 0.5))
+    end_idx = max(0, num_frames - 1)
+    
+    last_canvas = None
+    
+    for i, frame in enumerate(frame_gen):
         # Create base canvas (1080x1920 black image)
         canvas = Image.new("RGB", (1080, 1920), "black")
         
@@ -265,7 +310,7 @@ def render_video(config_path: str, output_path: str) -> None:
                     
             canvas.paste(frame_aux, (0, 1150), frame_aux)
         else:
-            # Resize to fit within 1080x1080 box, maintaining aspect ratio
+            # Revert to original size (1080x1080)
             sim_img.thumbnail((1080, 1080), Image.Resampling.LANCZOS)
             sim_w, sim_h = sim_img.size
             sim_x = (1080 - sim_w) // 2
@@ -281,19 +326,94 @@ def render_video(config_path: str, output_path: str) -> None:
         ty = 160
         draw.text((tx, ty), title, font=title_font, fill=(255, 255, 255))
         
-        # Draw Variable Log Readout (Green text below title)
+        # Store title bbox on first frame
+        if i == 0:
+            provenance_bboxes["title_bbox"] = {"y1": ty, "y2": ty + 90, "x1": tx, "x2": tx + title_w} # rough height estimate
+        
+        # Draw Variable Log Readout (below title)
         try:
-            if i < len(variable_logs) and variable_logs[i]:
-                log_str = " | ".join(f"{k}: {v}" for k, v in variable_logs[i].items())
-                log_w = draw.textlength(log_str, font=readout_font)
-                draw.text(((1080 - log_w) // 2, 280), log_str, font=readout_font, fill=(0, 255, 0))
+            if variable_logs:
+                current_log = variable_logs[-1]
+                if current_log:
+                    if isinstance(current_log, dict):
+                        # Legacy fallback for simulations not yet updated to list-of-dicts
+                        log_str = " | ".join(f"{k}: {v}" for k, v in current_log.items())
+                        log_w = draw.textlength(log_str, font=readout_font)
+                        draw.text(((1080 - log_w) // 2, 280), log_str, font=readout_font, fill=(0, 255, 0))
+                    elif isinstance(current_log, list):
+                        # New Priority 1: Color-coded variables
+                        # First pass: calculate total width
+                        total_w = 0
+                        segments = []
+                        for idx, entry in enumerate(current_log):
+                            name = entry.get("name", "")
+                            value = entry.get("value", "")
+                            role = entry.get("role", "static")
+                            if role == "metric":
+                                metric_index = entry.get("metric_index", 0)
+                                color = METRIC_COLORS[metric_index % len(METRIC_COLORS)]
+                            else:
+                                color = ROLE_COLORS.get(role, "#CFCFCF")
+                            
+                            text_str = f"{name}: {value}"
+                            w = draw.textlength(text_str, font=readout_font)
+                            segments.append({"text": text_str, "width": w, "color": color})
+                            total_w += w
+                            
+                            if idx < len(current_log) - 1:
+                                pipe_str = "  |  "
+                                pipe_w = draw.textlength(pipe_str, font=readout_font)
+                                segments.append({"text": pipe_str, "width": pipe_w, "color": "#B0B0B0"})
+                                total_w += pipe_w
+                            
+                        # Second pass: draw segments centered at fixed y=280
+                        curr_x = (1080 - total_w) // 2
+                        for seg in segments:
+                            draw.text((curr_x, 280), seg["text"], font=readout_font, fill=seg["color"])
+                            curr_x += seg["width"]
         except Exception as e:
             print(f"Exception during readout rendering: {e}")
             import traceback
             traceback.print_exc()
+
+        # Draw Annotations
+        if annotations:
+            try:
+                for ann in annotations:
+                    color_hex = ROLE_COLORS.get(ann.get("color", "static"), "#CFCFCF")
+                    coords = ann.get("coords", [])
+                    label = ann.get("label", "")
+                    ann_type = ann.get("type", "line")
+                    
+                    if ann_type == "circle" and len(coords) == 3:
+                        cx, cy, r = coords
+                        # Adjust coordinates relative to the simulation bounding box
+                        # since sim_img is pasted at (sim_x, sim_y)
+                        canvas_cx = sim_x + cx
+                        canvas_cy = sim_y + cy
+                        draw.ellipse([canvas_cx - r, canvas_cy - r, canvas_cx + r, canvas_cy + r], 
+                                     outline=color_hex, width=2)
+                        
+                        # Draw a small line to the label
+                        draw.line([canvas_cx + r, canvas_cy, canvas_cx + r + 20, canvas_cy], fill=color_hex, width=2)
+                        draw.text((canvas_cx + r + 25, canvas_cy - 15), label, font=annotation_font, fill=color_hex)
+                        
+                    elif ann_type == "bracket" and len(coords) == 4:
+                        x1, y1, x2, y2 = coords
+                        x1, x2 = sim_x + x1, sim_x + x2
+                        y1, y2 = sim_y + y1, sim_y + y2
+                        draw.line([x1, y1, x2, y2], fill=color_hex, width=2)
+                        # Add bracket ticks
+                        draw.line([x1, y1-5, x1, y1+5], fill=color_hex, width=2)
+                        draw.line([x2, y2-5, x2, y2+5], fill=color_hex, width=2)
+                        # Label at midpoint
+                        mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+                        draw.text((mx + 10, my - 15), label, font=annotation_font, fill=color_hex)
+                        
+            except Exception as e:
+                print(f"Exception during annotation rendering: {e}")
         
         # Draw Equation Overlay
-        # Scale down if the equation image is wider than the canvas (with padding)
         max_eq_width = 1000
         eq_scaled = eq_overlay.copy()
         eq_w, eq_h = eq_scaled.size
@@ -304,44 +424,88 @@ def render_video(config_path: str, output_path: str) -> None:
             eq_scaled = eq_scaled.resize((new_w, new_h), Image.Resampling.LANCZOS)
             eq_w, eq_h = eq_scaled.size
         
-        # Center equation horizontally
         eq_x = (1080 - eq_w) // 2
-        
-        # Target y = 1600 normally, or 1780 if we have aux plot taking up space
+        # Revert equation y position
         target_eq_y = 1780 if auxiliary_curves is not None else 1600
         eq_y = target_eq_y - eq_h // 2
         
-        # Clamp so equation never extends past the bottom (40px padding)
         if eq_y + eq_h > 1920 - 40:
             eq_y = 1920 - 40 - eq_h
         
         canvas.paste(eq_scaled, (eq_x, eq_y), eq_scaled)
         
-        # Save composite frame
-        frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
-        canvas.save(frame_path)
+        if i == 0:
+            provenance_bboxes["equation_bbox"] = {"y1": eq_y, "y2": eq_y + eq_h, "x1": eq_x, "x2": eq_x + eq_w}
         
-    print("Composition complete.")
-    
-    # 4. Find audio track (if any) in assets/music
-    music_dir = "assets/music"
-    audio_path = None
-    if os.path.exists(music_dir):
-        music_files = [os.path.join(music_dir, f) for f in os.listdir(music_dir) 
-                       if f.lower().endswith(('.mp3', '.wav'))]
-        if music_files:
-            audio_path = music_files[0]
-            print(f"Found background audio: {audio_path}")
+        # Stream bytes directly to ffmpeg
+        try:
+            ffmpeg_process.stdin.write(canvas.tobytes())
+        except BrokenPipeError:
+            print("Error: FFmpeg pipe broken! Stopping frame stream.")
+            break
             
-    # 5. Compile final video
-    frame_pattern = os.path.join(frames_dir, "frame_%04d.png")
-    ffmpeg.compile_video(frame_pattern, audio_path, output_path, fps=fps)
+        last_canvas = canvas
+        
+        # Save baseline frames for test_visuals.py
+        if baseline_dir and i in (start_idx, mid_idx, end_idx):
+            os.makedirs(baseline_dir, exist_ok=True)
+            name = "start" if i == start_idx else "mid" if i == mid_idx else "end"
+            dst = os.path.join(baseline_dir, f"{sim_name}_{name}.png")
+            canvas.save(dst)
+            
+        # Save explicit percentage frames for the user review (10%, 50%, 90%)
+        if baseline_dir:
+            checkpoints = {
+                27: "10pct",
+                138: "50pct",
+                248: "90pct"
+            }
+            if i in checkpoints:
+                name = checkpoints[i]
+                dst = os.path.join(baseline_dir, f"{sim_name}_frame_{i:03d}_{name}_v3.png")
+                canvas.save(dst)
+                print(f"Saved checkpoint frame {i} to {dst}")
+            
+    # Close the stdin pipe to tell ffmpeg we are done
+    if ffmpeg_process.stdin:
+        ffmpeg_process.stdin.close()
+        
+    print("Waiting for FFmpeg to finish...")
+    ffmpeg_process.wait()
     
-    # Save the last frame before cleanup
-    last_frame_src = os.path.join(frames_dir, f"frame_{len(sim_frames)-1:04d}.png")
-    if os.path.exists(last_frame_src):
-        shutil.copy(last_frame_src, "output/last_frame.png")
+    if ffmpeg_process.returncode != 0:
+        err_out = ffmpeg_process.stderr.read().decode("utf-8") if ffmpeg_process.stderr else "Unknown error"
+        raise RuntimeError(f"FFmpeg failed with code {ffmpeg_process.returncode}\n{err_out}")
+        
+    print(f"Successfully compiled video to {output_path}")
+    
+    if last_canvas:
+        last_canvas.save("output/last_frame.png")
         print("Saved last frame to output/last_frame.png")
+                
+    # Generate provenance sidecar
+    try:
+        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+    except Exception:
+        commit_hash = "unknown"
+        
+    provenance = {
+        "simulation": sim_name,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "config": config,
+        "commit": commit_hash,
+        "environment": {
+            "python": sys.version,
+            "os": os.name
+        },
+        "ocr_bboxes": provenance_bboxes
+    }
+    prov_path = os.path.join(os.path.dirname(output_path), f"{sim_name}_provenance.json")
+    with open(prov_path, "w", encoding="utf-8") as f:
+        json.dump(provenance, f, indent=4)
+        
+    print(f"Generated provenance sidecar: {prov_path}")
+
         
     # 6. Cleanup temp files
     try:
@@ -356,6 +520,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--config", required=True, help="Path to the YAML configuration file.")
     parser.add_argument("--output", required=True, help="Path to save the output MP4 video.")
+    parser.add_argument("--baseline-dir", required=False, help="Directory to save Start/Mid/End baseline frames.")
     
     args = parser.parse_args()
-    render_video(args.config, args.output)
+    render_video(args.config, args.output, args.baseline_dir)

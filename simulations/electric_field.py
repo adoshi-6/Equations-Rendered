@@ -34,10 +34,10 @@ TEST_SPEC = {
 }
 
 # Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red (Positive Charge)
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue (Negative Charge)
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
-COLOR_TRAIL = (255, 120, 0)      # Orange
+COLOR_ROLE_1 = (232, 93, 74)     # Primary (#E85D4A)
+COLOR_ROLE_2 = (93, 168, 232)    # Secondary (#5DA8E8)
+COLOR_ROLE_3 = (127, 174, 107)   # Auxiliary (#7FAE6B)
+COLOR_TRAIL = (127, 174, 107)    # Auxiliary for fields
 
 def recommended_duration(config: dict) -> float:
     """
@@ -67,117 +67,130 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
 
     trace_steps = 180
     trace_dt = 3.5
-
-    frames = []
     variable_logs = []
 
     print("Generating Electric Field Lines frames...")
 
-    for f in range(num_frames):
-        progress = f / max(1, num_frames - 1)
-        rotation = progress * 2.0 * np.pi
+    def frame_generator():
+        for f in range(num_frames):
+            progress = f / max(1, num_frames - 1)
+            rotation = progress * 2.0 * np.pi
         
-        # Log variables
-        variable_logs.append({
-            "System Angle": f"{(rotation * 180 / np.pi):.1f}°",
-            "Total Charge": "0.0 C"
-        })
+            # Log variables
+            variable_logs.append([
+                {"name": "System Angle", "value": f"{(rotation * 180 / np.pi):.1f}°", "role": "metric", "metric_index": 0},
+                {"name": "Total Charge", "value": "0.0 C", "role": "metric", "metric_index": 1}
+            ])
 
-        charge_positions = []
-        for i in range(n_charges):
-            angle = base_angles[i] + rotation
-            cx = center_x + charge_radius * np.cos(angle)
-            cy = center_y + charge_radius * np.sin(angle)
-            charge_positions.append((cx, cy))
+            charge_positions = []
+            for i in range(n_charges):
+                angle = base_angles[i] + rotation
+                cx = center_x + charge_radius * np.cos(angle)
+                cy = center_y + charge_radius * np.sin(angle)
+                charge_positions.append((cx, cy))
 
-        seeds_x = []
-        seeds_y = []
-        for i, q in enumerate(charges_q):
-            if q > 0:
-                cx, cy = charge_positions[i]
-                for sa in seed_angles:
-                    seeds_x.append(cx + 18.0 * np.cos(sa))
-                    seeds_y.append(cy + 18.0 * np.sin(sa))
+            seeds_x = []
+            seeds_y = []
+            for i, q in enumerate(charges_q):
+                if q > 0:
+                    cx, cy = charge_positions[i]
+                    for sa in seed_angles:
+                        seeds_x.append(cx + 18.0 * np.cos(sa))
+                        seeds_y.append(cy + 18.0 * np.sin(sa))
 
-        seeds_x = np.array(seeds_x)
-        seeds_y = np.array(seeds_y)
-        n_seeds = len(seeds_x)
+            seeds_x = np.array(seeds_x)
+            seeds_y = np.array(seeds_y)
+            n_seeds = len(seeds_x)
 
-        all_x = np.zeros((trace_steps, n_seeds))
-        all_y = np.zeros((trace_steps, n_seeds))
-        all_x[0] = seeds_x
-        all_y[0] = seeds_y
+            all_x = np.zeros((trace_steps, n_seeds))
+            all_y = np.zeros((trace_steps, n_seeds))
+            all_x[0] = seeds_x
+            all_y[0] = seeds_y
 
-        for step in range(1, trace_steps):
-            px_s = all_x[step - 1]
-            py_s = all_y[step - 1]
+            for step in range(1, trace_steps):
+                px_s = all_x[step - 1]
+                py_s = all_y[step - 1]
 
-            ex = np.zeros(n_seeds)
-            ey = np.zeros(n_seeds)
+                ex = np.zeros(n_seeds)
+                ey = np.zeros(n_seeds)
+
+                for i, q in enumerate(charges_q):
+                    cx, cy = charge_positions[i]
+                    dx = px_s - cx
+                    dy = py_s - cy
+                    r2 = dx**2 + dy**2 + 1e-4
+                    r = np.sqrt(r2)
+                    r3 = r2 * r
+                    ex += q * dx / r3
+                    ey += q * dy / r3
+
+                mag = np.sqrt(ex**2 + ey**2) + 1e-12
+                ex /= mag
+                ey /= mag
+
+                all_x[step] = px_s + trace_dt * ex
+                all_y[step] = py_s + trace_dt * ey
+
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
+
+            for s in range(n_seeds):
+                t = s / max(1, n_seeds - 1)
+                if t < 0.5:
+                    fac = t * 2.0
+                    col = (
+                        int(COLOR_ROLE_1[0] * (1-fac) + COLOR_TRAIL[0] * fac),
+                        int(COLOR_ROLE_1[1] * (1-fac) + COLOR_TRAIL[1] * fac),
+                        int(COLOR_ROLE_1[2] * (1-fac) + COLOR_TRAIL[2] * fac)
+                    )
+                else:
+                    fac = (t - 0.5) * 2.0
+                    col = (
+                        int(COLOR_TRAIL[0] * (1-fac) + COLOR_ROLE_2[0] * fac),
+                        int(COLOR_TRAIL[1] * (1-fac) + COLOR_ROLE_2[1] * fac),
+                        int(COLOR_TRAIL[2] * (1-fac) + COLOR_ROLE_2[2] * fac)
+                    )
+
+                for step in range(1, trace_steps):
+                    x0, y0 = all_x[step - 1, s], all_y[step - 1, s]
+                    x1, y1 = all_x[step, s], all_y[step, s]
+
+                    if (x1 < -50 or x1 > width + 50 or y1 < -50 or y1 > height + 50):
+                        break
+
+                    alpha = max(10, int(160 * (1.0 - step / trace_steps)))
+                    draw.line([(x0, y0), (x1, y1)], fill=col + (alpha,), width=2)
+                    
+                    # Pedagogical Annotation for one specific field line (s == 10)
+                    if s == 10 and step == trace_steps // 2:
+                        cx0, cy0 = charge_positions[0] # Positive charge
+                        draw.line([(cx0, cy0), (x1, y1)], fill=COLOR_ROLE_3 + (200,), width=2)
+                        # Draw arrowhead manually
+                        dx_r, dy_r = x1 - cx0, y1 - cy0
+                        mag_r = np.sqrt(dx_r**2 + dy_r**2)
+                        if mag_r > 0:
+                            ux, uy = dx_r / mag_r, dy_r / mag_r
+                            draw.line([(x1, y1), (x1 - 10*ux - 10*uy, y1 - 10*uy + 10*ux)], fill=COLOR_ROLE_3 + (200,), width=2)
+                            draw.line([(x1, y1), (x1 - 10*ux + 10*uy, y1 - 10*uy - 10*ux)], fill=COLOR_ROLE_3 + (200,), width=2)
+                        # Label r
+                        draw.text(((cx0 + x1) // 2 + 10, (cy0 + y1) // 2), "r", fill=COLOR_ROLE_3 + (255,))
 
             for i, q in enumerate(charges_q):
                 cx, cy = charge_positions[i]
-                dx = px_s - cx
-                dy = py_s - cy
-                r2 = dx**2 + dy**2 + 1e-4
-                r = np.sqrt(r2)
-                r3 = r2 * r
-                ex += q * dx / r3
-                ey += q * dy / r3
+                r_draw = 14
+                if q > 0:
+                    draw.ellipse([cx - r_draw, cy - r_draw, cx + r_draw, cy + r_draw],
+                                 fill=COLOR_ROLE_1 + (255,), outline=(255, 200, 100, 255), width=2)
+                    draw.line([(cx - 6, cy), (cx + 6, cy)], fill=(255, 255, 255, 255), width=2)
+                    draw.line([(cx, cy - 6), (cx, cy + 6)], fill=(255, 255, 255, 255), width=2)
+                else:
+                    draw.ellipse([cx - r_draw, cy - r_draw, cx + r_draw, cy + r_draw],
+                                 fill=COLOR_ROLE_2 + (255,), outline=(100, 180, 255, 255), width=2)
+                    draw.line([(cx - 6, cy), (cx + 6, cy)], fill=(255, 255, 255, 255), width=2)
 
-            mag = np.sqrt(ex**2 + ey**2) + 1e-12
-            ex /= mag
-            ey /= mag
+            yield np.array(img.convert("RGB"))
 
-            all_x[step] = px_s + trace_dt * ex
-            all_y[step] = py_s + trace_dt * ey
+            if (f + 1) % 30 == 0:
+                print(f"  Frame {f + 1}/{num_frames}")
 
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
-
-        for s in range(n_seeds):
-            t = s / max(1, n_seeds - 1)
-            if t < 0.5:
-                fac = t * 2.0
-                col = (
-                    int(COLOR_ROLE_1[0] * (1-fac) + COLOR_TRAIL[0] * fac),
-                    int(COLOR_ROLE_1[1] * (1-fac) + COLOR_TRAIL[1] * fac),
-                    int(COLOR_ROLE_1[2] * (1-fac) + COLOR_TRAIL[2] * fac)
-                )
-            else:
-                fac = (t - 0.5) * 2.0
-                col = (
-                    int(COLOR_TRAIL[0] * (1-fac) + COLOR_ROLE_2[0] * fac),
-                    int(COLOR_TRAIL[1] * (1-fac) + COLOR_ROLE_2[1] * fac),
-                    int(COLOR_TRAIL[2] * (1-fac) + COLOR_ROLE_2[2] * fac)
-                )
-
-            for step in range(1, trace_steps):
-                x0, y0 = all_x[step - 1, s], all_y[step - 1, s]
-                x1, y1 = all_x[step, s], all_y[step, s]
-
-                if (x1 < -50 or x1 > width + 50 or y1 < -50 or y1 > height + 50):
-                    break
-
-                alpha = max(10, int(160 * (1.0 - step / trace_steps)))
-                draw.line([(x0, y0), (x1, y1)], fill=col + (alpha,), width=2)
-
-        for i, q in enumerate(charges_q):
-            cx, cy = charge_positions[i]
-            r_draw = 14
-            if q > 0:
-                draw.ellipse([cx - r_draw, cy - r_draw, cx + r_draw, cy + r_draw],
-                             fill=COLOR_ROLE_1 + (255,), outline=(255, 200, 100, 255), width=2)
-                draw.line([(cx - 6, cy), (cx + 6, cy)], fill=(255, 255, 255, 255), width=2)
-                draw.line([(cx, cy - 6), (cx, cy + 6)], fill=(255, 255, 255, 255), width=2)
-            else:
-                draw.ellipse([cx - r_draw, cy - r_draw, cx + r_draw, cy + r_draw],
-                             fill=COLOR_ROLE_2 + (255,), outline=(100, 180, 255, 255), width=2)
-                draw.line([(cx - 6, cy), (cx + 6, cy)], fill=(255, 255, 255, 255), width=2)
-
-        frames.append(np.array(img.convert("RGB")))
-
-        if (f + 1) % 30 == 0:
-            print(f"  Frame {f + 1}/{num_frames}")
-
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

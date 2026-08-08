@@ -148,7 +148,6 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     trail_history = []
     max_trail_len = 100
     
-    frames = []
     variable_logs = []
     
     def get_trail_color(i, n):
@@ -158,51 +157,53 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
         b = 255
         return (r, g, b)
         
-    t_curr = 0.0
-    for f in range(num_frames):
-        for _ in range(n_substeps):
-            state = rk4_step(lorenz_derivs, state, t_curr, dt, sigma, rho, beta)
-            t_curr += dt
-            
-        st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
-        x, y, z = st_cpu[:, 0], st_cpu[:, 1], st_cpu[:, 2]
-        
-        # Record variable log
-        std_dev = float(np.std(x))
-        variable_logs.append({
-            "Divergence (σ)": f"{std_dev:.3f}",
-            "Avg X": f"{float(np.mean(x)):.2f}"
-        })
-        
-        px = center_x + x * scale
-        py = center_y - (z - 25) * scale
-        
-        trail_history.append((px.copy(), py.copy()))
-        if len(trail_history) > max_trail_len:
-            trail_history.pop(0)
-            
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
-        
-        history_len = len(trail_history)
-        if history_len > 1:
-            for h in range(1, history_len):
-                opacity_factor = h / history_len
-                alpha = int(140 * opacity_factor**1.8)
+    def frame_generator():
+        t_curr = 0.0
+        for f in range(num_frames):
+            nonlocal state
+            for _ in range(n_substeps):
+                state = rk4_step(lorenz_derivs, state, t_curr, dt, sigma, rho, beta)
+                t_curr += dt
                 
-                prev_x, prev_y = trail_history[h-1]
-                curr_x, curr_y = trail_history[h]
+            st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
+            x, y, z = st_cpu[:, 0], st_cpu[:, 1], st_cpu[:, 2]
+            
+            # Record variable log
+            std_dev = float(np.std(x))
+            variable_logs.append({
+                "Divergence (σ)": f"{std_dev:.3f}",
+                "Avg X": f"{float(np.mean(x)):.2f}"
+            })
+            
+            px = center_x + x * scale
+            py = center_y - (z - 25) * scale
+            
+            trail_history.append((px.copy(), py.copy()))
+            if len(trail_history) > max_trail_len:
+                trail_history.pop(0)
                 
-                for i in range(num_trajectories):
-                    draw.line(
-                        [(prev_x[i], prev_y[i]), (curr_x[i], curr_y[i])],
-                        fill=get_trail_color(i, num_trajectories) + (alpha,),
-                        width=2
-                    )
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
+            
+            history_len = len(trail_history)
+            if history_len > 1:
+                for h in range(1, history_len):
+                    opacity_factor = h / history_len
+                    alpha = int(140 * opacity_factor**1.8)
                     
-        for i in range(num_trajectories):
-            draw.ellipse([px[i]-3, py[i]-3, px[i]+3, py[i]+3], fill=COLOR_ROLE_1 + (255,))
+                    prev_x, prev_y = trail_history[h-1]
+                    curr_x, curr_y = trail_history[h]
+                    
+                    for i in range(num_trajectories):
+                        draw.line(
+                            [(prev_x[i], prev_y[i]), (curr_x[i], curr_y[i])],
+                            fill=get_trail_color(i, num_trajectories) + (alpha,),
+                            width=2
+                        )
+                        
+            for i in range(num_trajectories):
+                draw.ellipse([px[i]-3, py[i]-3, px[i]+3, py[i]+3], fill=COLOR_ROLE_1 + (255,))
+                
+            yield np.array(img.convert("RGB"))
             
-        frames.append(np.array(img.convert("RGB")))
-        
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

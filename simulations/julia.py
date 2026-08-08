@@ -68,8 +68,6 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     
     zoom_rate = (w_end / w_start) ** (1.0 / num_frames)
     max_iter = 120
-    
-    frames = []
     variable_logs = []
     
     u = xp.linspace(-0.5, 0.5, width)
@@ -81,52 +79,53 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     # Julia constant
     C = -0.8 + 0.156j
     
-    for f in range(num_frames):
-        w = w_start * (zoom_rate ** f)
+    def frame_generator():
+        for f in range(num_frames):
+            w = w_start * (zoom_rate ** f)
         
-        c_real = x_center + uu * w
-        c_imag = y_center + vv * w
-        z = c_real + 1j * c_imag
+            c_real = x_center + uu * w
+            c_imag = y_center + vv * w
+            z = c_real + 1j * c_imag
         
-        iterations = xp.zeros(z.shape, dtype=xp.float32)
-        active = xp.ones(z.shape, dtype=xp.bool_)
+            iterations = xp.zeros(z.shape, dtype=xp.float32)
+            active = xp.ones(z.shape, dtype=xp.bool_)
         
-        for n in range(max_iter):
-            z[active] = z[active]**2 + C
+            for n in range(max_iter):
+                z[active] = z[active]**2 + C
             
-            escaped = (z.real**2 + z.imag**2) > 4.0
-            newly_escaped = escaped & active
+                escaped = (z.real**2 + z.imag**2) > 4.0
+                newly_escaped = escaped & active
             
-            iterations[newly_escaped] = n
-            active[newly_escaped] = False
+                iterations[newly_escaped] = n
+                active[newly_escaped] = False
             
-            if not xp.any(active):
-                break
+                if not xp.any(active):
+                    break
                 
-        zoom_level = 3.0 / w
-        variable_logs.append({
-            "Zoom Depth": f"{zoom_level:.1f}x",
-            "Max Iterations": str(max_iter)
-        })
+            zoom_level = 3.0 / w
+            variable_logs.append({
+                "Zoom Depth": f"{zoom_level:.1f}x",
+                "Max Iterations": str(max_iter)
+            })
         
-        escaped_mask = ~active
-        if xp.any(escaped_mask):
-            z_esc = z[escaped_mask]
-            log_zn = xp.log(z_esc.real**2 + z_esc.imag**2) / 2.0
-            nu = xp.log(log_zn / xp.log(2.0)) / xp.log(2.0)
-            iterations[escaped_mask] = iterations[escaped_mask] + 1.0 - nu
+            escaped_mask = ~active
+            if xp.any(escaped_mask):
+                z_esc = z[escaped_mask]
+                log_zn = xp.log(z_esc.real**2 + z_esc.imag**2) / 2.0
+                nu = xp.log(log_zn / xp.log(2.0)) / xp.log(2.0)
+                iterations[escaped_mask] = iterations[escaped_mask] + 1.0 - nu
             
-        norm_iter = iterations / max_iter
-        color_grid = get_palette_color(norm_iter, active)
+            norm_iter = iterations / max_iter
+            color_grid = get_palette_color(norm_iter, active)
         
-        if hasattr(color_grid, "get"):
-            frame = color_grid.get()
-        else:
-            frame = np.asarray(color_grid)
+            if hasattr(color_grid, "get"):
+                frame = color_grid.get()
+            else:
+                frame = np.asarray(color_grid)
             
-        frames.append(frame)
+            yield frame
         
-        if (f + 1) % 30 == 0:
-            print(f"Processed frame {f + 1}/{num_frames}...")
+            if (f + 1) % 30 == 0:
+                print(f"Processed frame {f + 1}/{num_frames}...")
             
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

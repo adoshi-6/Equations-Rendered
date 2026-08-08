@@ -27,7 +27,7 @@ TEST_SPEC = {
     ]
 }
 
-def generate(config: dict) -> tuple[list[np.ndarray], list[dict], dict]:
+def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     duration = config.get("duration", 15.0)
     fps = config.get("fps", 30)
     num_frames = int(duration * fps)
@@ -40,8 +40,6 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict], dict]:
     x = np.linspace(0, 2 * np.pi, 500)
     
     t_vals = np.linspace(0, duration, num_frames)
-    
-    frames = []
     variable_logs = []
     
     # Track the point at x = pi/4 to show distinct y1 and y2 component waves
@@ -51,37 +49,38 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict], dict]:
     
     print("Generating Standing Wave frames...")
     
-    for f in range(num_frames):
-        t = t_vals[f]
+    def frame_generator():
+        for f in range(num_frames):
+            t = t_vals[f]
         
-        y1 = np.sin(x - t)
-        y2 = np.sin(x + t)
-        y_sum = y1 + y2
+            y1 = np.sin(x - t)
+            y2 = np.sin(x + t)
+            y_sum = y1 + y2
         
-        variable_logs.append({
-            "Time (t)": f"{t:.2f} s",
-            "Amplitude (x=π/2)": f"{np.sin(x0 - t) + np.sin(x0 + t):.2f}"
-        })
+            variable_logs.append({
+                "Time (t)": f"{t:.2f} s",
+                "Amplitude (x=π/2)": f"{np.sin(x0 - t) + np.sin(x0 + t):.2f}"
+            })
         
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
         
-        def draw_wave(y_array, color, lw):
-            pts = []
-            for i in range(len(x)):
-                px = x[i] * scale_x
-                py = center_y - y_array[i] * scale_y
-                pts.append((px, py))
-            draw.line(pts, fill=color, width=lw)
+            def draw_wave(y_array, color, lw):
+                pts = []
+                for i in range(len(x)):
+                    px = x[i] * scale_x
+                    py = center_y - y_array[i] * scale_y
+                    pts.append((px, py))
+                draw.line(pts, fill=color, width=lw)
             
-        draw_wave(y1, COLOR_WAVE1, 2)
-        draw_wave(y2, COLOR_WAVE2, 2)
-        draw_wave(y_sum, COLOR_SUM, 5)
+            draw_wave(y1, COLOR_WAVE1, 2)
+            draw_wave(y2, COLOR_WAVE2, 2)
+            draw_wave(y_sum, COLOR_SUM, 5)
         
-        frames.append(np.array(img))
+            yield np.array(img)
         
-        if (f + 1) % 30 == 0:
-            print(f"Processed frame {f + 1}/{num_frames}...")
+            if (f + 1) % 30 == 0:
+                print(f"Processed frame {f + 1}/{num_frames}...")
             
     auxiliary_curves = {
         "series": {
@@ -91,4 +90,4 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict], dict]:
         "time": t_vals
     }
             
-    return frames, variable_logs, auxiliary_curves
+    return frame_generator(), variable_logs, auxiliary_curves

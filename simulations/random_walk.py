@@ -84,43 +84,43 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     scale = 35.0
     
     state = xp.zeros((num_particles, 2))
-    
-    frames = []
     variable_logs = []
     
     print("Generating Random Walk frames...")
     
     t_curr = 0.0
     
-    for f in range(num_frames):
-        step_std = xp.sqrt(2 * D * dt)
-        step = xp.random.normal(0, step_std, size=(num_particles, 2))
-        state += step
-        t_curr += dt
+    def frame_generator():
+        nonlocal state, t_curr
+        for f in range(num_frames):
+            step_std = xp.sqrt(2 * D * dt)
+            step = xp.random.normal(0, step_std, size=(num_particles, 2))
+            state += step
+            t_curr += dt
         
-        st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
+            st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
         
-        var_x = float(np.var(st_cpu[:, 0]))
-        var_y = float(np.var(st_cpu[:, 1]))
+            var_x = float(np.var(st_cpu[:, 0]))
+            var_y = float(np.var(st_cpu[:, 1]))
         
-        variable_logs.append({
-            "Time (t)": f"{t_curr:.2f} s",
-            "Variance (X)": f"{var_x:.2f}",
-            "Variance (Y)": f"{var_y:.2f}"
-        })
+            variable_logs.append({
+                "Time (t)": f"{t_curr:.2f} s",
+                "Variance (X)": f"{var_x:.2f}",
+                "Variance (Y)": f"{var_y:.2f}"
+            })
         
-        px = center_x + st_cpu[:, 0] * scale
-        py = center_y - st_cpu[:, 1] * scale
+            px = center_x + st_cpu[:, 0] * scale
+            py = center_y - st_cpu[:, 1] * scale
         
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img, "RGBA")
+            img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img, "RGBA")
         
-        for i in range(num_particles):
-            draw.ellipse([px[i]-2, py[i]-2, px[i]+2, py[i]+2], fill=COLOR_ROLE_2 + (150,))
+            for i in range(num_particles):
+                draw.ellipse([px[i]-2, py[i]-2, px[i]+2, py[i]+2], fill=COLOR_ROLE_2 + (150,))
             
-        frames.append(np.array(img))
+            yield np.array(img)
         
-        if (f + 1) % 30 == 0:
-            print(f"Processed frame {f + 1}/{num_frames}...")
+            if (f + 1) % 30 == 0:
+                print(f"Processed frame {f + 1}/{num_frames}...")
             
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None

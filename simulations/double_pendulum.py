@@ -45,10 +45,10 @@ def double_pendulum_derivs(state, t, L1, L2, m1, m2, g):
     return deriv
 
 # Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red (Mass 1 / Rod 1)
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue (Mass 2 / Rod 2)
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green (Pivot)
-COLOR_TRAIL = (255, 120, 0)      # Orange (Paths/Trails)
+COLOR_ROLE_1 = (232, 93, 74)     # Primary (Mass 1 / Rod 1)
+COLOR_ROLE_2 = (93, 168, 232)    # Secondary (Mass 2 / Rod 2)
+COLOR_ROLE_3 = (127, 174, 107)   # Auxiliary (Pivot)
+COLOR_TRAIL = (93, 168, 232)     # Match Secondary for Trails
 
 from duration_utils import BoundingBoxPlateauDetector
 
@@ -173,15 +173,11 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     trail_history = []
     max_trail_len = 80
     
-    frames = []
     variable_logs = []
-    
+        
     def get_trail_color(i, n):
-        t = i / max(1, n - 1)
-        r = int(255 * (1 - t))
-        g = int(255 * t)
-        b = 255
-        return (r, g, b)
+        # All trails just use COLOR_TRAIL
+        return COLOR_TRAIL
     
     def get_cpu_positions(st):
         if hasattr(st, "get"):
@@ -202,68 +198,82 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
         
         return px1, py1, px2, py2
         
-    print("Simulating double pendulum trajectories...")
-    t_curr = 0.0
-    
-    for f in range(num_frames):
-        for _ in range(n_substeps):
-            state = rk4_step(double_pendulum_derivs, state, t_curr, dt, L1, L2, m1, m2, g)
-            t_curr += dt
-            
-        # Log variables
-        st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
-        theta1 = st_cpu[:, 0]
-        theta2 = st_cpu[:, 1]
-        std_dev = float(np.std(theta2))
-        avg_theta1 = float(np.mean(theta1))
+    def frame_generator():
+        print("Simulating double pendulum trajectories...")
+        t_curr = 0.0
         
-        variable_logs.append({
-            "Avg θ₁": f"{avg_theta1:.2f} rad",
-            "Divergence (σ)": f"{std_dev:.5f}"
-        })
-            
-        px1, py1, px2, py2 = get_cpu_positions(state)
-        
-        trail_history.append((px2.copy(), py2.copy()))
-        if len(trail_history) > max_trail_len:
-            trail_history.pop(0)
-            
-        img = Image.new("RGBA", (1080, 1080), (0, 0, 0, 255))
-        draw = ImageDraw.Draw(img)
-        
-        history_len = len(trail_history)
-        if history_len > 1:
-            for h in range(1, history_len):
-                opacity_factor = h / history_len
-                alpha = int(120 * opacity_factor**1.5)
+        for f in range(num_frames):
+            nonlocal state
+            for _ in range(n_substeps):
+                state = rk4_step(double_pendulum_derivs, state, t_curr, dt, L1, L2, m1, m2, g)
+                t_curr += dt
                 
-                prev_x, prev_y = trail_history[h-1]
-                curr_x, curr_y = trail_history[h]
+            # Log variables
+            st_cpu = state.get() if hasattr(state, "get") else np.asarray(state)
+            theta1 = st_cpu[:, 0]
+            theta2 = st_cpu[:, 1]
+            std_dev = float(np.std(theta2))
+            
+            total_E = np.mean(compute_energy(st_cpu))
+            variable_logs.append([
+                {"name": "Total Energy", "value": f"{total_E:.2f} J", "role": "metric", "metric_index": 0},
+                {"name": "Divergence (σ)", "value": f"{std_dev:.5f}", "role": "metric", "metric_index": 1}
+            ])
                 
-                for i in range(num_trajectories):
-                    draw.line(
-                        [(prev_x[i], prev_y[i]), (curr_x[i], curr_y[i])],
-                        fill=get_trail_color(i, num_trajectories) + (alpha,),
-                        width=2
-                    )
+            px1, py1, px2, py2 = get_cpu_positions(state)
+            
+            trail_history.append((px2.copy(), py2.copy()))
+            if len(trail_history) > max_trail_len:
+                trail_history.pop(0)
+                
+            img = Image.new("RGBA", (1080, 1080), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
+            
+            history_len = len(trail_history)
+            if history_len > 1:
+                for h in range(1, history_len):
+                    opacity_factor = h / history_len
+                    alpha = int(120 * opacity_factor**1.5)
                     
-        # Draw physical pendulum arms
-        for i in [0, num_trajectories - 1]:
-            # Arm 1 (Pivot to Joint) -> Role 1 (Red)
-            draw.line([(center_x, center_y), (px1[i], py1[i])], fill=COLOR_ROLE_1 + (255,), width=4)
-            # Arm 2 (Joint to Tip) -> Role 2 (Blue)
-            draw.line([(px1[i], py1[i]), (px2[i], py2[i])], fill=COLOR_ROLE_2 + (255,), width=4)
+                    prev_x, prev_y = trail_history[h-1]
+                    curr_x, curr_y = trail_history[h]
+                    
+                    for i in range(num_trajectories):
+                        draw.line(
+                            [(prev_x[i], prev_y[i]), (curr_x[i], curr_y[i])],
+                            fill=get_trail_color(i, num_trajectories) + (alpha,),
+                            width=2
+                        )
+                        
+            # Draw physical pendulum arms
+            for i in [0, num_trajectories - 1]:
+                # Arm 1 (Pivot to Joint) -> Role 1 (Red)
+                draw.line([(center_x, center_y), (px1[i], py1[i])], fill=COLOR_ROLE_1 + (255,), width=4)
+                # Arm 2 (Joint to Tip) -> Role 2 (Blue)
+                draw.line([(px1[i], py1[i]), (px2[i], py2[i])], fill=COLOR_ROLE_2 + (255,), width=4)
+                
+                # Draw joint and tip circles
+                draw.ellipse([px1[i]-6, py1[i]-6, px1[i]+6, py1[i]+6], fill=COLOR_ROLE_1 + (255,))
+                
+            # Draw the pivot -> Role 3 (Green)
+            draw.ellipse([center_x-8, center_y-8, center_x+8, center_y+8], fill=COLOR_ROLE_3 + (255,))
             
-            # Draw joint and tip circles
-            draw.ellipse([px1[i]-6, py1[i]-6, px1[i]+6, py1[i]+6], fill=COLOR_ROLE_1 + (255,))
+            # Pedagogical Annotation: Arc for theta1
+            # We'll draw a dashed vertical line and an arc to the first pendulum arm
+            draw.line([(center_x, center_y), (center_x, center_y + 40)], fill=(150, 150, 150, 200), width=2)
+            arc_radius = 40
+            t1_deg = np.degrees(theta1[0])
+            # PIL arc takes [bounding box], start, end angles. 0 is +x, 90 is +y (down).
+            # Vertical line is at 90 deg. The arm is at 90 - theta1 (wait, x=sin, y=cos means it's 90 - t1).
+            # The angle in PIL is clockwise. Vertical is 90. The arm is 90 - t1_deg.
+            start_ang, end_ang = min(90, 90 - t1_deg), max(90, 90 - t1_deg)
+            draw.arc([center_x - arc_radius, center_y - arc_radius, center_x + arc_radius, center_y + arc_radius], 
+                     start=start_ang, end=end_ang, fill=COLOR_ROLE_3 + (255,), width=2)
             
-        # Draw the pivot -> Role 3 (Green)
-        draw.ellipse([center_x-8, center_y-8, center_x+8, center_y+8], fill=COLOR_ROLE_3 + (255,))
-        
-        # Draw the current particles at the tip
-        for i in range(num_trajectories):
-            draw.ellipse([px2[i]-3, py2[i]-3, px2[i]+3, py2[i]+3], fill=COLOR_ROLE_2 + (255,))
+            # Draw the current particles at the tip
+            for i in range(num_trajectories):
+                draw.ellipse([px2[i]-3, py2[i]-3, px2[i]+3, py2[i]+3], fill=COLOR_ROLE_2 + (255,))
+                
+            yield np.array(img.convert("RGB"))
             
-        frames.append(np.array(img.convert("RGB")))
-        
-    return frames, variable_logs
+    return frame_generator(), variable_logs, None
