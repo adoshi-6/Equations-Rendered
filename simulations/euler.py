@@ -33,23 +33,47 @@ def generate(config: dict):
     variable_logs = []
     logs = []
     
-    cx, cy = w // 2, h // 2
-    radius = 300
+
+    # PRECOMPUTE BOUNDS (Section 3.6)
+    # Trajectory is unit circle: x in [-1, 1], y in [-1, 1].
+    # Annotations: axes go from -1.333 to +1.333.
+    # Hatching is at x = -1.333.
+    min_x, max_x = -1.333, 1.333
+    min_y, max_y = -1.333, 1.333
+    
+    range_x = max_x - min_x
+    range_y = max_y - min_y
+    margin_x = range_x * 0.10
+    margin_y = range_y * 0.10
+    
+    min_x -= margin_x
+    max_x += margin_x
+    min_y -= margin_y
+    max_y += margin_y
+    
+    scale_x = 1080 / (max_x - min_x)
+    scale_y = 1080 / (max_y - min_y)
+    radius = float(min(scale_x, scale_y))
+    
+    # In Euler, cx and cy are hardcoded. We compute them dynamically:
+    cx = int(1080 / 2 - ((min_x + max_x) / 2) * radius)
+    cy = int(1080 / 2 + ((min_y + max_y) / 2) * radius)
+
     
     # Pre-draw static background
     bg = Image.new("RGB", (w, h), COLOR_BG)
     draw_bg = ImageDraw.Draw(bg)
     
     # Draw axes
-    draw_bg.line([(cx - 400, cy), (cx + 400, cy)], fill=COLOR_AXIS, width=2)
-    draw_bg.line([(cx, cy - 400), (cx, cy + 400)], fill=COLOR_AXIS, width=2)
+    draw_bg.line([(cx - int(1.333 * radius), cy), (cx + int(1.333 * radius), cy)], fill=COLOR_AXIS, width=2)
+    draw_bg.line([(cx, cy - int(1.333 * radius)), (cx, cy + int(1.333 * radius))], fill=COLOR_AXIS, width=2)
     
     # Draw unit circle
     draw_bg.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], outline=COLOR_AXIS, width=2)
     
     # Example usage of drawing primitives (just for POC)
     # We'll put a fixed wall at the left
-    draw_hatching(draw_bg, (cx - 400, cy - 100), (cx - 400, cy + 100), normal_dir=(1, 0), color=COLOR_AXIS)
+    draw_hatching(draw_bg, (cx - int(1.333 * radius), cy - 100), (cx - int(1.333 * radius), cy + 100), normal_dir=(1, 0), color=COLOR_AXIS)
     
     def frame_generator():
         for i in range(num_frames):
@@ -62,7 +86,7 @@ def generate(config: dict):
             py = cy - int(im_array[i] * radius) # -y is up in PIL
         
             # Draw spring from left wall to the mass
-            draw_spring(draw, (cx - 400, cy), (px, py), num_coils=8, color=(150, 150, 150))
+            draw_spring(draw, (cx - int(1.333 * radius), cy), (px, py), num_coils=8, color=(150, 150, 150))
         
             # Draw vector
             draw.line([(cx, cy), (px, py)], fill=COLOR_VECTOR, width=4)

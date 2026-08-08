@@ -55,16 +55,15 @@ def simulate_headless(config: dict):
     
     states = []
     
-    def frame_generator():
-        for f in range(num_frames):
-            for _ in range(iters_per_frame):
-                x_new = 1.0 - a * x**2 + y
-                y_new = b * x
-                x, y = x_new, y_new
-        
-            xc = x.get() if hasattr(x, "get") else np.asarray(x)
-            yc = y.get() if hasattr(y, "get") else np.asarray(y)
-            states.append(np.stack([xc, yc], axis=-1))
+    for f in range(num_frames):
+        for _ in range(iters_per_frame):
+            x_new = 1.0 - a * x**2 + y
+            y_new = b * x
+            x, y = x_new, y_new
+    
+        xc = x.get() if hasattr(x, "get") else np.asarray(x)
+        yc = y.get() if hasattr(y, "get") else np.asarray(y)
+        states.append(np.stack([xc, yc], axis=-1))
         
     return np.arange(num_frames), states
 
