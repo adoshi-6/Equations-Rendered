@@ -161,20 +161,6 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                     alpha = max(10, int(160 * (1.0 - step / trace_steps)))
                     draw.line([(x0, y0), (x1, y1)], fill=col + (alpha,), width=2)
                     
-                    # Pedagogical Annotation for one specific field line (s == 10)
-                    if s == 10 and step == trace_steps // 2:
-                        cx0, cy0 = charge_positions[0] # Positive charge
-                        draw.line([(cx0, cy0), (x1, y1)], fill=COLOR_ROLE_3 + (200,), width=2)
-                        # Draw arrowhead manually
-                        dx_r, dy_r = x1 - cx0, y1 - cy0
-                        mag_r = np.sqrt(dx_r**2 + dy_r**2)
-                        if mag_r > 0:
-                            ux, uy = dx_r / mag_r, dy_r / mag_r
-                            draw.line([(x1, y1), (x1 - 10*ux - 10*uy, y1 - 10*uy + 10*ux)], fill=COLOR_ROLE_3 + (200,), width=2)
-                            draw.line([(x1, y1), (x1 - 10*ux + 10*uy, y1 - 10*uy - 10*ux)], fill=COLOR_ROLE_3 + (200,), width=2)
-                        # Label r
-                        draw.text(((cx0 + x1) // 2 + 10, (cy0 + y1) // 2), "r", fill=COLOR_ROLE_3 + (255,))
-
             for i, q in enumerate(charges_q):
                 cx, cy = charge_positions[i]
                 r_draw = 14
@@ -187,6 +173,50 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                     draw.ellipse([cx - r_draw, cy - r_draw, cx + r_draw, cy + r_draw],
                                  fill=COLOR_ROLE_2 + (255,), outline=(100, 180, 255, 255), width=2)
                     draw.line([(cx - 6, cy), (cx + 6, cy)], fill=(255, 255, 255, 255), width=2)
+
+            # Pedagogical Annotation: Vector from a charge (r_i) to a fixed point in space (r)
+            # representing \vec{r} - \vec{r}_i
+            target_x, target_y = center_x + 150, center_y - 150
+            cx0, cy0 = charge_positions[0] # Positive charge 0
+            
+            # Draw point \vec{r}
+            draw.ellipse([target_x - 5, target_y - 5, target_x + 5, target_y + 5], fill=COLOR_ROLE_3 + (255,))
+            
+            # Draw vector \vec{r} - \vec{r}_i
+            draw.line([(cx0, cy0), (target_x, target_y)], fill=COLOR_ROLE_3 + (255,), width=6)
+            
+            # Arrowhead
+            dx_r, dy_r = target_x - cx0, target_y - cy0
+            mag_r = np.sqrt(dx_r**2 + dy_r**2)
+            if mag_r > 0:
+                ux, uy = dx_r / mag_r, dy_r / mag_r
+                draw.line([(target_x, target_y), (target_x - 15*ux - 15*uy, target_y - 15*uy + 15*ux)], fill=COLOR_ROLE_3 + (255,), width=5)
+                draw.line([(target_x, target_y), (target_x - 15*ux + 15*uy, target_y - 15*uy - 15*ux)], fill=COLOR_ROLE_3 + (255,), width=5)
+                
+            # Label r
+            # Use matplotlib to generate the label once
+            if not hasattr(frame_generator, "math_label"):
+                import matplotlib.pyplot as plt
+                import io
+                fig = plt.figure(figsize=(2, 1), dpi=100)
+                fig.patch.set_alpha(0.0)
+                ax = fig.add_axes([0, 0, 1, 1])
+                ax.axis('off')
+                ax.patch.set_alpha(0.0)
+                # Use COLOR_ROLE_3 hex for color
+                hex_color = '#%02x%02x%02x' % COLOR_ROLE_3
+                ax.text(0.5, 0.5, r"$\vec{r} - \vec{r}_i$", color=hex_color, fontsize=32, ha='center', va='center', weight='bold')
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', transparent=True, bbox_inches='tight', pad_inches=0)
+                plt.close(fig)
+                buf.seek(0)
+                frame_generator.math_label = Image.open(buf).convert("RGBA")
+                
+            label_x = int((cx0 + target_x) / 2 + 15)
+            label_y = int((cy0 + target_y) / 2 - 25)
+            
+            # Paste the math label
+            img.paste(frame_generator.math_label, (label_x, label_y), frame_generator.math_label)
 
             yield np.array(img.convert("RGB"))
 

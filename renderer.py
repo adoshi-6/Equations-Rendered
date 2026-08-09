@@ -93,25 +93,7 @@ def render_equation_latex(equation: str, output_path: str) -> bool:
         import traceback
         print(f"Matplotlib rendering failed: {e}")
         traceback.print_exc()
-        # Fallback to PIL is only used if Matplotlib genuinely fails, 
-        # but user said skip straight to mathtext, ONLY fallback if it genuinely fails.
-
-    # 3. PIL Fallback (draw plain text on transparent image)
-    try:
-        # Create a transparent PIL image
-        img = Image.new("RGBA", (1080, 200), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        font = load_font(32)
-        
-        # Draw the equation centered
-        text_w = draw.textlength(equation, font=font)
-        draw.text(((1080 - text_w) // 2, 80), equation, font=font, fill=(255, 255, 255, 255))
-        img.save(output_path)
-        print("Successfully rendered equation via PIL.")
-        return True
-    except Exception as e3:
-        print(f"PIL fallback rendering failed: {e3}")
-        return False
+        raise RuntimeError(f"Equation rendering failed! Matplotlib is required but encountered an error: {e}")
 
 def render_video(config_path: str, output_path: str, baseline_dir: str = None) -> None:
     """
@@ -249,11 +231,11 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
         "secondary": "#5DA8E8",    # powder blue — comparison trajectory
         "auxiliary": "#7FAE6B",    # sage green — derived/aux curve
         "control": "#D4C24A",      # muted yellow — tunable parameter
-        "static": "#CFCFCF",       # off-white — fixed parameter
+        "static": "#A8B5C2",       # pale blue-grey — fixed parameter
     }
     
     METRIC_COLORS = [
-        "#E86B5D",  # coral — metric 0
+        "#E8905D",  # warm amber — metric 0
         "#B87FC9",  # dusty purple — metric 1
         "#C97FA0",  # muted rose — metric 2 (if needed)
         "#7FC9B0",  # muted teal — metric 3 (if needed)
@@ -363,7 +345,7 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
                             if idx < len(current_log) - 1:
                                 pipe_str = "  |  "
                                 pipe_w = draw.textlength(pipe_str, font=readout_font)
-                                segments.append({"text": pipe_str, "width": pipe_w, "color": "#B0B0B0"})
+                                segments.append({"text": pipe_str, "width": pipe_w, "color": "#FFFFFF"})
                                 total_w += pipe_w
                             
                         # Second pass: draw segments centered at fixed y=280

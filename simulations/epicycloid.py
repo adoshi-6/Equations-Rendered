@@ -87,12 +87,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
         
             variable_logs.append([
                 {"name": "Time (t)", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
-                {"name": "Radius (R)", "value": f"{pt['x']**2 + pt['y']**2:.2f}", "role": "metric", "metric_index": 1}
+                {"name": "Radius (R)", "value": f"{pt['x']**2 + pt['y']**2:.2f}", "role": "primary"}
             ])
         
             img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
             draw = ImageDraw.Draw(img)
-        
+            
             R_radius = k * r * scale
             r_radius = r * scale
             
@@ -105,17 +105,29 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             draw.ellipse([rc_x - r_radius, rc_y - r_radius, rc_x + r_radius, rc_y + r_radius], outline=COLOR_ROLE_3 + (255,), width=2)
             
             # Pedagogical Annotation: Radii lines and labels
+            try:
+                from renderer import load_italic_font
+                ann_font = load_italic_font(28)
+            except ImportError:
+                ann_font = None
+                
             # R line from origin to fixed circle edge
             R_end_x = center_x + R_radius * np.cos(t)
             R_end_y = center_y - R_radius * np.sin(t)
             draw.line([(center_x, center_y), (R_end_x, R_end_y)], fill=COLOR_ROLE_3 + (150,), width=2)
             # Label R at midpoint
-            draw.text(((center_x + R_end_x) // 2 + 5, (center_y + R_end_y) // 2 - 20), "R", fill=COLOR_ROLE_3 + (255,))
+            if ann_font:
+                draw.text(((center_x + R_end_x) // 2 + 5, (center_y + R_end_y) // 2 - 20), "R", fill=COLOR_ROLE_3 + (255,), font=ann_font)
+            else:
+                draw.text(((center_x + R_end_x) // 2 + 5, (center_y + R_end_y) // 2 - 20), "R", fill=COLOR_ROLE_3 + (255,))
             
             # r line from rc_center to px, py
             draw.line([(rc_x, rc_y), (px, py)], fill=COLOR_ROLE_3 + (255,), width=2)
             # Label r at midpoint
-            draw.text(((rc_x + px) // 2 + 5, (rc_y + py) // 2 - 20), "r", fill=COLOR_ROLE_3 + (255,))
+            if ann_font:
+                draw.text(((rc_x + px) // 2 + 5, (rc_y + py) // 2 - 20), "r", fill=COLOR_ROLE_3 + (255,), font=ann_font)
+            else:
+                draw.text(((rc_x + px) // 2 + 5, (rc_y + py) // 2 - 20), "r", fill=COLOR_ROLE_3 + (255,))
             
             if len(trail) > 1:
                 draw.line(trail, fill=COLOR_TRAIL + (255,), width=4)

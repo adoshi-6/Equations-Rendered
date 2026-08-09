@@ -9,10 +9,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend import xp
 
 # Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
-COLOR_TRAIL = (255, 120, 0)      # Orange
+COLOR_ROLE_1 = (232, 93, 74)     # Primary (#E85D4A)
+COLOR_ROLE_2 = (93, 168, 232)    # Secondary (#5DA8E8)
+COLOR_ROLE_3 = (127, 174, 107)   # Auxiliary (#7FAE6B)
+COLOR_TRAIL = (93, 168, 232)     # Match Secondary
 
 def evaluate_point(inp):
     t, delta = inp["t"], inp["delta"]
@@ -57,8 +57,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     num_frames = int(duration * fps)
     
     width, height = 1080, 1080
-    center_x, center_y = 540, 540
-    scale = 430.0
+    center_x, center_y = width / 2, height / 2
+    
+    # PRECOMPUTE BOUNDS (Section 3.6)
+    # The mathematical extent of sin() is [-1, 1]. Adding 10% margin gives [-1.1, 1.1]
+    range_span = 2.2
+    scale = float(min(width / range_span, height / range_span))
     
     freq_x = 3.0
     freq_y = 4.0
@@ -74,11 +78,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
         for f in range(num_frames):
             base_delta = 2.0 * xp.pi * (f / max(1, num_frames - 1))
         
-            # Log variable
-            variable_logs.append({
-                "Phase (δ)": f"{base_delta:.2f} rad",
-                "Ratio ω_x/ω_y": f"{freq_x}/{freq_y}"
-            })
+            # Log variable (Section 3.3)
+            # 0: amber, 1: purple
+            variable_logs.append([
+                {"name": "Ratio", "value": f"{freq_x:.0f}:{freq_y:.0f}", "role": "metric", "metric_index": 1},
+                {"name": "Phase (δ)", "value": f"{base_delta:.2f} rad", "role": "metric", "metric_index": 0}
+            ])
         
             img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
             draw = ImageDraw.Draw(img)
@@ -99,10 +104,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                 py_cpu = np.asarray(py)
             
             for i in range(num_curves):
-                color = get_gradient_color(i, num_curves)
+                # Draw the trail using a single primary color with a soft fading alpha (max 40)
+                alpha = int(40 * (i / max(1, num_curves - 1)))
+                color = tuple(int(c) for c in COLOR_ROLE_1)
             
                 pts = [(px_cpu[i, k], py_cpu[i, k]) for k in range(num_points)]
-                draw.line(pts, fill=color + (40,), width=2)
+                draw.line(pts, fill=color + (alpha,), width=2)
             
             yield np.array(img.convert("RGB"))
         

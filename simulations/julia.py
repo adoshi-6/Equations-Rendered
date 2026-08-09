@@ -7,10 +7,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import xp
 
-COLOR_ROLE_1 = xp.array([255.0, 50.0, 50.0])
-COLOR_ROLE_2 = xp.array([50.0, 150.0, 255.0])
-COLOR_ROLE_3 = xp.array([50.0, 255.0, 50.0])
-COLOR_TRAIL = xp.array([255.0, 120.0, 0.0])
+COLOR_ROLE_1 = xp.array([232.0, 93.0, 74.0])     # Primary (#E85D4A)
+COLOR_ROLE_2 = xp.array([93.0, 168.0, 232.0])    # Secondary (#5DA8E8)
+COLOR_ROLE_3 = xp.array([127.0, 174.0, 107.0])   # Auxiliary (#7FAE6B)
+COLOR_TRAIL = xp.array([93.0, 168.0, 232.0])     # Match Secondary
 
 def recommended_duration(config: dict) -> float:
     return 20.0
@@ -103,10 +103,10 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                     break
                 
             zoom_level = 3.0 / w
-            variable_logs.append({
-                "Zoom Depth": f"{zoom_level:.1f}x",
-                "Max Iterations": str(max_iter)
-            })
+            variable_logs.append([
+                {"name": "Zoom Depth", "value": f"{zoom_level:.1f}x", "role": "metric", "metric_index": 0},
+                {"name": "Max Iterations", "value": str(max_iter), "role": "metric", "metric_index": 1}
+            ])
         
             escaped_mask = ~active
             if xp.any(escaped_mask):

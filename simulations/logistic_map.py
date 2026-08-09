@@ -27,10 +27,10 @@ TEST_SPEC = {
 }
 
 # Universal Palette
-COLOR_ROLE_1 = xp.array([255.0, 50.0, 50.0])     # Bright Red
-COLOR_ROLE_2 = xp.array([50.0, 150.0, 255.0])    # Electric Blue
-COLOR_ROLE_3 = xp.array([50.0, 255.0, 50.0])     # Neon Green
-COLOR_TRAIL = xp.array([255.0, 120.0, 0.0])      # Orange
+COLOR_ROLE_1 = xp.array([232.0, 93.0, 74.0])     # Primary (#E85D4A)
+COLOR_ROLE_2 = xp.array([93.0, 168.0, 232.0])    # Secondary (#5DA8E8)
+COLOR_ROLE_3 = xp.array([127.0, 174.0, 107.0])   # Auxiliary (#7FAE6B)
+COLOR_TRAIL = xp.array([93.0, 168.0, 232.0])     # Match Secondary
 
 def recommended_duration(config: dict) -> float:
     """
@@ -64,7 +64,7 @@ def get_palette_color(density):
 
 def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     """
-    Generates frames and variable logs for the Logistic Map Bifurcation Zoom.
+    Generates frames and variable logs for the Logistic Map Bifurcation Sweep.
     """
     duration = config.get("duration", 15.0)
     fps = config.get("fps", 30)
@@ -72,17 +72,10 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     
     width, height = 1080, 1080
     
-    r_center = 3.842  
-    x_center = 0.525
-    
-    r_width_start = 1.1
-    x_height_start = 1.0
-    
-    r_width_end = 0.005
-    x_height_end = 0.005
-    
-    zoom_r = (r_width_end / r_width_start) ** (1.0 / num_frames)
-    zoom_x = (x_height_end / x_height_start) ** (1.0 / num_frames)
+    r_min_global = 2.5
+    r_max_global = 4.0
+    x_min_global = 0.0
+    x_max_global = 1.0
     
     num_trajectories = 250
     transient_iters = 300
@@ -91,41 +84,38 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     
     col_indices = xp.tile(xp.arange(width), (num_trajectories, 1))
     
-    print("Generating Logistic Map zoom frames...")
+    print("Generating Logistic Map static sweep frames...")
     
     def frame_generator():
+        # Precompute the entire density grid for a static sweep
+        # We will reveal it gradually from left to right as r sweeps.
+        density_grid_full = xp.zeros((height, width), dtype=xp.float32)
+        r_all = xp.linspace(r_min_global, r_max_global, width)[None, :]
+        x_all = xp.linspace(0.1, 0.9, num_trajectories)[:, None] * xp.ones((1, width))
+        
+        for _ in range(transient_iters):
+            x_all = r_all * x_all * (1.0 - x_all)
+            
+        for _ in range(plot_iters):
+            x_all = r_all * x_all * (1.0 - x_all)
+            y_px = ((x_max_global - x_all) / (x_max_global - x_min_global) * height).astype(xp.int32)
+            valid = (y_px >= 0) & (y_px < height)
+            xp.add.at(density_grid_full, (y_px[valid], col_indices[valid]), 1.0)
+            
         for f in range(num_frames):
-            r_w = r_width_start * (zoom_r ** f)
-            x_h = x_height_start * (zoom_x ** f)
-        
+            progress = f / max(1, num_frames - 1)
+            current_r = r_min_global + progress * (r_max_global - r_min_global)
+            
             # Log variable
-            zoom_level = 1.1 / r_w
-            variable_logs.append({
-                "Zoom Depth": f"{zoom_level:.1f}x",
-                "Viewport Δr": f"{r_w:.5f}"
-            })
-        
-            r_min = r_center - r_w / 2.0
-            r_max = r_center + r_w / 2.0
-            x_min = x_center - x_h / 2.0
-            x_max = x_center + x_h / 2.0
-        
-            r = xp.linspace(r_min, r_max, width)[None, :]
-            r = xp.clip(r, 0.0, 4.0)
-        
-            x = xp.linspace(0.1, 0.9, num_trajectories)[:, None] * xp.ones((1, width))
-        
-            for _ in range(transient_iters):
-                x = r * x * (1.0 - x)
+            variable_logs.append([
+                {"name": "Growth Rate (r)", "value": f"{current_r:.4f}", "role": "metric", "metric_index": 0}
+            ])
             
-            density_grid = xp.zeros((height, width), dtype=xp.float32)
-        
-            for _ in range(plot_iters):
-                x = r * x * (1.0 - x)
-            
-                y_px = ((x_max - x) / (x_max - x_min) * height).astype(xp.int32)
-                valid = (y_px >= 0) & (y_px < height)
-                xp.add.at(density_grid, (y_px[valid], col_indices[valid]), 1.0)
+            # Mask the density grid to only show up to current_r
+            col_limit = int(progress * width)
+            density_grid = xp.zeros_like(density_grid_full)
+            if col_limit > 0:
+                density_grid[:, :col_limit] = density_grid_full[:, :col_limit]
             
             max_val = xp.max(density_grid)
             if max_val > 0:

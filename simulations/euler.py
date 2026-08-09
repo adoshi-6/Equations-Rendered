@@ -104,8 +104,8 @@ def generate(config: dict):
     for i, (t, re, im) in enumerate(zip(t_array, re_array, im_array)):
         logs.append([
             {"name": "Angle", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
-            {"name": "Re", "value": f"{re:.2f}", "role": "metric", "metric_index": 1},
-            {"name": "Im", "value": f"{im:.2f}", "role": "metric", "metric_index": 2}
+            {"name": "Re", "value": f"{re:.2f}", "role": "primary"},
+            {"name": "Im", "value": f"{im:.2f}", "role": "secondary"}
         ])
         
     auxiliary_curves = {
