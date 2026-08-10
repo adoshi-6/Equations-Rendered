@@ -8,13 +8,96 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import xp
 
+def _is_periodic(r, period, x0=0.5, transient=1000, check_iters=20, tol=1e-4):
+    """Returns True if the orbit at parameter r settles into a cycle of
+    (at most) the given period, starting from x0."""
+    x = x0
+    for _ in range(transient):
+        x = r * x * (1.0 - x)
+    x_ref = x
+    for _ in range(period):
+        x = r * x * (1.0 - x)
+    for _ in range(check_iters):
+        if abs(x - x_ref) > tol:
+            return False
+        for _ in range(period):
+            x = r * x * (1.0 - x)
+    return True
+
+
+def _find_period_doubling_r(period, r_start, r_end, r_lower_period, step=0.0005, x0=0.5):
+    """
+    Finds the smallest r in [r_start, r_end] where the orbit has period
+    EXACTLY `period` — i.e. is_periodic(r, period) is True but
+    is_periodic(r, r_lower_period) is False. The lower-period exclusion is
+    necessary because e.g. a period-1 fixed point trivially also satisfies
+    "is_periodic(r, 2)" (applying the map twice from a fixed point still
+    returns the fixed point), so checking period alone isn't enough to find
+    the genuine bifurcation point.
+    """
+    r = r_start
+    while r <= r_end:
+        if _is_periodic(r, period, x0=x0) and not _is_periodic(r, r_lower_period, x0=x0):
+            return float(r)
+        r += step
+    return None
+
+
+def _lyapunov_exponent(r, x0=0.5, transient=2000, n_iters=2000):
+    """
+    Average of ln|f'(x)| = ln|r(1-2x)| over the orbit after discarding a
+    transient. This is the standard operational definition used to locate
+    the onset of chaos: the exponent is negative for periodic (non-chaotic)
+    orbits and crosses positive at the chaos threshold.
+    """
+    x = x0
+    for _ in range(transient):
+        x = r * x * (1.0 - x)
+    total = 0.0
+    for _ in range(n_iters):
+        deriv = abs(r * (1.0 - 2.0 * x))
+        total += np.log(max(deriv, 1e-12))
+        x = r * x * (1.0 - x)
+    return total / n_iters
+
+
+def _find_chaos_onset(r_start=3.54, r_end=3.60, step=0.0002, sustain_check=10):
+    """
+    Scans r upward and finds the first point where the Lyapunov exponent
+    turns positive and STAYS positive for `sustain_check` consecutive
+    samples. The sustain requirement avoids false-triggering on the many
+    narrow periodic windows embedded within the chaotic regime (the exponent
+    briefly dips negative inside these windows), while still being tight
+    enough to land close to the true Feigenbaum accumulation point
+    (r \u2248 3.569946).
+    """
+    r_vals = np.arange(r_start, r_end, step)
+    lyap_vals = [_lyapunov_exponent(r) for r in r_vals]
+    for i in range(len(lyap_vals) - sustain_check):
+        if all(v > 0 for v in lyap_vals[i:i + sustain_check]):
+            return float(r_vals[i])
+    return None
+
+
 def find_bifurcation_transitions(config):
-    # known transitions: period 2 at r=3.0, period 4 at 3.449
-    # simple mock or basic calculation
+    """
+    Numerically detects the period-doubling bifurcation points and the onset
+    of chaos for the logistic map, rather than returning hardcoded values.
+
+    NOTE: this function previously returned the exact hardcoded constants
+    that TEST_SPEC checked against — meaning the "bifurcation" physics test
+    was an unfalsifiable tautology that could never fail regardless of
+    whether the actual rendered bifurcation diagram was correct. Fixed to
+    perform genuine period-doubling detection (via cycle-length checking) and
+    Lyapunov-exponent-based chaos-onset detection.
+    """
+    period_2 = _find_period_doubling_r(2, 2.8, 3.3, r_lower_period=1)
+    period_4 = _find_period_doubling_r(4, 3.3, 3.5, r_lower_period=2)
+    chaos_onset = _find_chaos_onset()
     return {
-        "period_2": 3.00,
-        "period_4": 3.449,
-        "chaos_onset": 3.569
+        "period_2": period_2,
+        "period_4": period_4,
+        "chaos_onset": chaos_onset,
     }
 
 TEST_SPEC = {

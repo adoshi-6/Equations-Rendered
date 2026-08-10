@@ -12,6 +12,31 @@ def test_conservation(module, config, conserved_quantities, tolerance=0.1):
         results[qty] = {"start": val_start, "end": val_end, "drift": drift, "passed": passed}
     return results
 
+def _extract_var_value(log_entry, var_name):
+    """
+    Extracts a numeric value for var_name from a single variable_log entry,
+    supporting BOTH schemas currently in use across the codebase:
+      - legacy flat dict:      {"Divergence (\u03c3)": "8.93312", ...}
+      - current list-of-dicts: [{"name": "Divergence (\u03c3)", "value": "8.93312", ...}, ...]
+    Returns None if var_name isn't present in this entry.
+    (This function previously only handled the legacy dict format via
+    `if var_name in log: log[var_name]`, which silently found nothing for
+    every simulation migrated to the list-of-dicts schema — a confirmed real
+    bug that made trend-assertion testing non-functional for every migrated
+    simulation. Fixed here to support both.)
+    """
+    if isinstance(log_entry, dict):
+        if var_name in log_entry:
+            return log_entry[var_name]
+        return None
+    if isinstance(log_entry, list):
+        for item in log_entry:
+            if isinstance(item, dict) and item.get("name") == var_name:
+                return item.get("value")
+        return None
+    return None
+
+
 def test_trend_assertions(module, config, assertions):
     """
     Verifies that certain metrics trend in expected directions over the course of the simulation.
@@ -21,12 +46,28 @@ def test_trend_assertions(module, config, assertions):
         # Use generate() to get variables logs since simulate_headless might not return them
         sim_output = module.generate(config)
         if isinstance(sim_output, tuple):
-            if len(sim_output) == 3:
-                _, variable_logs, _ = sim_output
+            if len(sim_output) == 4:
+                frame_gen, variable_logs, _, _ = sim_output
+            elif len(sim_output) == 3:
+                frame_gen, variable_logs, _ = sim_output
             elif len(sim_output) == 2:
-                _, variable_logs = sim_output
+                frame_gen, variable_logs = sim_output
+            else:
+                return {"error": f"Module generate() returned unexpected tuple length {len(sim_output)}", "passed": False}
         else:
             return {"error": "Module generate() did not return variable_logs", "passed": False}
+
+        # CRITICAL: variable_logs is populated incrementally, inside the frame
+        # generator's body, for every correctly-implemented simulation (this
+        # is the architecturally-required pattern — see renderer.py's
+        # variable_logs[-1] usage). That means variable_logs stays EMPTY until
+        # the generator is actually driven forward. Previously this function
+        # never iterated frame_gen at all, so every trend assertion silently
+        # failed with "not found" regardless of the simulation or schema —
+        # not a data problem, a "the generator was never run" problem. Drain
+        # it here (frames themselves aren't needed for this test).
+        for _ in frame_gen:
+            pass
     except Exception as e:
         return {"error": str(e), "passed": False}
         
@@ -36,11 +77,18 @@ def test_trend_assertions(module, config, assertions):
     for var_name, expected_trend in assertions.items():
         var_values = []
         for log in variable_logs:
-            if var_name in log:
-                try:
-                    var_values.append(float(log[var_name]))
-                except ValueError:
-                    pass
+            raw_val = _extract_var_value(log, var_name)
+            if raw_val is None:
+                continue
+            try:
+                # Values are often formatted strings like "78.93" or "12.25 J" —
+                # strip any trailing non-numeric unit/suffix before parsing.
+                import re as _re
+                m = _re.match(r'^\s*(-?\d+\.?\d*)', str(raw_val))
+                if m:
+                    var_values.append(float(m.group(1)))
+            except (ValueError, TypeError):
+                pass
                     
         if not var_values:
             results[var_name] = {"passed": False, "error": f"Variable '{var_name}' not found in logs"}

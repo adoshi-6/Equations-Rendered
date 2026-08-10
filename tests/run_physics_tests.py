@@ -102,7 +102,25 @@ def run_category(category, module, config, spec):
                 status = "PASS" if data["passed"] else "FAIL"
                 print(f"   [{status}] {stat}: expected {data['expected']:.4f}, actual {data['actual']:.4f}")
                 print(f"          Difference: {data['diff_pct']:.2f}% (Tolerance: {res['tolerance_pct']}%)")
-                
+
+        elif category == "trend_assertions":
+            # NOTE: this category was previously completely unreachable — no
+            # dispatch branch existed for it at all, so test_trend_assertions()
+            # never actually ran for any simulation regardless of TEST_SPEC
+            # contents. Wired in here.
+            res = physics_framework.test_trend_assertions(module, config, spec["trend_assertions"])
+            if "error" in res:
+                print(f"   [ERROR] {res['error']}")
+            else:
+                for var, data in res.items():
+                    if var == "overall_passed":
+                        continue
+                    status = "PASS" if data.get("passed") else "FAIL"
+                    if "error" in data:
+                        print(f"   [{status}] {var}: {data['error']}")
+                    else:
+                        print(f"   [{status}] {var} ({data['expected']}): v1={data['v1']:.4f}, v2={data['v2']:.4f}, v3={data['v3']:.4f}")
+
         else:
             print(f"   [WARNING] Unknown category: {category}")
             

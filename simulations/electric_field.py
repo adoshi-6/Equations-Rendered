@@ -8,28 +8,64 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import xp
 
+# The ACTUAL charge configuration used by frame_generator() below, at
+# rotation=0 (i.e. the "System Angle: 0.0°" frame). Duplicated here as
+# module-level constants so evaluate_point() and frame_generator() are
+# guaranteed to model the same physical setup.
+_CENTER_X, _CENTER_Y = 540.0, 540.0
+_CHARGE_RADIUS = 200.0
+_CHARGES_Q = [1.0, -1.0, 1.0, -1.0]
+_BASE_ANGLES = [0.0, np.pi / 2, np.pi, 3 * np.pi / 2]
+
+
+def _charge_positions_at_rotation(rotation: float):
+    positions = []
+    for i in range(len(_CHARGES_Q)):
+        angle = _BASE_ANGLES[i] + rotation
+        cx = _CENTER_X + _CHARGE_RADIUS * np.cos(angle)
+        cy = _CENTER_Y + _CHARGE_RADIUS * np.sin(angle)
+        positions.append((cx, cy))
+    return positions
+
+
 def evaluate_point(inp):
+    """
+    Evaluates the E field at a point, using the SAME 4-charge configuration
+    (positions, signs, inverse-cube Coulomb law) as the actual rendered
+    field-line animation at rotation=0.
+
+    NOTE: this previously modeled a completely different, disconnected
+    2-charge configuration (charges at +/-1.5 on the x-axis) that never
+    appeared anywhere in the actual rendered animation (which always shows 4
+    charges rotating). Passing that old TEST_SPEC validated a Coulomb's-law
+    implementation that was never exercised by the real render — a confirmed
+    gap between what the physics test checked and what was actually drawn.
+    Fixed to use the real configuration so this test means something.
+    """
     x, y = inp["x"], inp["y"]
-    # charges: 1.0 at (-1.5, 0), -1.0 at (1.5, 0)
-    q1, x1, y1 = 1.0, -1.5, 0.0
-    q2, x2, y2 = -1.0, 1.5, 0.0
-    
+    rotation = inp.get("rotation", 0.0)
     k = 1.0
-    dx1, dy1 = x - x1, y - y1
-    dx2, dy2 = x - x2, y - y2
-    r1 = max(np.sqrt(dx1**2 + dy1**2), 1e-6)
-    r2 = max(np.sqrt(dx2**2 + dy2**2), 1e-6)
-    
-    Ex = k * q1 * dx1 / r1**3 + k * q2 * dx2 / r2**3
-    Ey = k * q1 * dy1 / r1**3 + k * q2 * dy2 / r2**3
+
+    charge_positions = _charge_positions_at_rotation(rotation)
+
+    Ex, Ey = 0.0, 0.0
+    for q, (cx, cy) in zip(_CHARGES_Q, charge_positions):
+        dx, dy = x - cx, y - cy
+        r = max(np.sqrt(dx**2 + dy**2), 1e-6)
+        Ex += k * q * dx / r**3
+        Ey += k * q * dy / r**3
+
     return {"Ex": float(Ex), "Ey": float(Ey)}
 
 TEST_SPEC = {
     "category": "known_points",
     "known_points": [
-        ({"x": 0.0, "y": 0.0}, {"Ex": 2.0 / 1.5**2, "Ey": 0.0}, 1e-4), # midway
-        ({"x": 1.0, "y": 1.0}, {"Ex": 0.4858366, "Ey": -0.6643154}, 1e-4),
-        ({"x": -1.0, "y": -1.0}, {"Ex": 0.4858366, "Ey": -0.6643154}, 1e-4),
+        # At rotation=0, the 4 alternating +/-1 charges sit symmetrically
+        # around the center at equal radius (200px) and 90-degree spacing.
+        # By symmetry, the field at the exact center must be exactly zero —
+        # a genuine, non-trivial check: if a charge sign or position were
+        # ever wired incorrectly, this would no longer cancel to zero.
+        ({"x": _CENTER_X, "y": _CENTER_Y, "rotation": 0.0}, {"Ex": 0.0, "Ey": 0.0}, 1e-9),
     ],
 }
 

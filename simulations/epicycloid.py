@@ -85,9 +85,17 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
         
             trail.append((px, py))
         
+            # NOTE: previously this field was labeled "Radius (R)" but computed
+            # pt['x']**2 + pt['y']**2 — the SQUARED distance from origin to the
+            # traced point (missing sqrt, and varying every frame). That is
+            # neither the epicycloid's actual fixed parameter R (=k*r, a
+            # constant, drawn as the large annotation circle) nor a true
+            # distance. Fixed to report the actual fixed R parameter, tagged
+            # "auxiliary" since it corresponds to the green annotation circle,
+            # not the red traced-point marker ("primary").
             variable_logs.append([
                 {"name": "Time (t)", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
-                {"name": "Radius (R)", "value": f"{pt['x']**2 + pt['y']**2:.2f}", "role": "primary"}
+                {"name": "Fixed Radius (R)", "value": f"{k * r:.2f}", "role": "auxiliary"}
             ])
         
             img = Image.new("RGBA", (width, height), (0, 0, 0, 255))

@@ -377,8 +377,9 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
                                      outline=color_hex, width=2)
                         
                         # Draw a small line to the label
+                        label_dx, label_dy = ann.get("label_offset", (0, 0))
                         draw.line([canvas_cx + r, canvas_cy, canvas_cx + r + 20, canvas_cy], fill=color_hex, width=2)
-                        draw.text((canvas_cx + r + 25, canvas_cy - 15), label, font=annotation_font, fill=color_hex)
+                        draw.text((canvas_cx + r + 25 + label_dx, canvas_cy - 15 + label_dy), label, font=annotation_font, fill=color_hex)
                         
                     elif ann_type == "bracket" and len(coords) == 4:
                         x1, y1, x2, y2 = coords
@@ -389,9 +390,40 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
                         draw.line([x1, y1-5, x1, y1+5], fill=color_hex, width=2)
                         draw.line([x2, y2-5, x2, y2+5], fill=color_hex, width=2)
                         # Label at midpoint
+                        label_dx, label_dy = ann.get("label_offset", (0, 0))
                         mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-                        draw.text((mx + 10, my - 15), label, font=annotation_font, fill=color_hex)
-                        
+                        draw.text((mx + 10 + label_dx, my - 15 + label_dy), label, font=annotation_font, fill=color_hex)
+
+                    elif ann_type == "line" and len(coords) == 4:
+                        x1, y1, x2, y2 = coords
+                        cx1, cy1 = sim_x + x1, sim_y + y1
+                        cx2, cy2 = sim_x + x2, sim_y + y2
+                        draw.line([cx1, cy1, cx2, cy2], fill=color_hex, width=3)
+
+                        # Arrowhead at the end point (cx2, cy2)
+                        dx_l, dy_l = cx2 - cx1, cy2 - cy1
+                        mag_l = (dx_l ** 2 + dy_l ** 2) ** 0.5
+                        if mag_l > 1e-6:
+                            ux_l, uy_l = dx_l / mag_l, dy_l / mag_l
+                            ahx1 = cx2 - 12 * ux_l - 8 * uy_l
+                            ahy1 = cy2 - 12 * uy_l + 8 * ux_l
+                            ahx2 = cx2 - 12 * ux_l + 8 * uy_l
+                            ahy2 = cy2 - 12 * uy_l - 8 * ux_l
+                            draw.line([cx2, cy2, ahx1, ahy1], fill=color_hex, width=3)
+                            draw.line([cx2, cy2, ahx2, ahy2], fill=color_hex, width=3)
+
+                        # Label near the midpoint, offset perpendicular to the line.
+                        # `label_offset` (dx, dy) lets a simulation stagger labels
+                        # apart when multiple annotations share a small anchor
+                        # region — added after gradient_descent's Raw ∇f/Clipped
+                        # Step/Clip Bound labels were found to overlap illegibly
+                        # once the "line" annotation type actually started
+                        # rendering (previously silently dropped, so this
+                        # collision was never visible before).
+                        label_dx, label_dy = ann.get("label_offset", (0, 0))
+                        mx, my = (cx1 + cx2) / 2, (cy1 + cy2) / 2
+                        draw.text((mx + 10 + label_dx, my - 15 + label_dy), label, font=annotation_font, fill=color_hex)
+
             except Exception as e:
                 print(f"Exception during annotation rendering: {e}")
         
@@ -436,17 +468,23 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
             canvas.save(dst)
             
         # Save explicit percentage frames for the user review (10%, 50%, 90%)
+        # NOTE: computed dynamically from the ACTUAL num_frames of this render,
+        # not hardcoded — a fixed frame-index dict (e.g. {27: "10pct", ...})
+        # silently drifts out of sync whenever duration/num_frames changes
+        # between renders (confirmed bug: fixed indices assumed ~276 frames,
+        # but renders now commonly produce 300+ frames after the 10s floor
+        # clamp, making "frame 27" actually ~9% instead of 10%, etc.)
         if baseline_dir:
-            checkpoints = {
-                27: "10pct",
-                138: "50pct",
-                248: "90pct"
+            pct_checkpoints = {
+                max(0, int(num_frames * 0.10)): "10pct",
+                max(0, int(num_frames * 0.50)): "50pct",
+                max(0, num_frames - 1 - int(num_frames * 0.10)): "90pct",
             }
-            if i in checkpoints:
-                name = checkpoints[i]
+            if i in pct_checkpoints:
+                name = pct_checkpoints[i]
                 dst = os.path.join(baseline_dir, f"{sim_name}_frame_{i:03d}_{name}_v3.png")
                 canvas.save(dst)
-                print(f"Saved checkpoint frame {i} to {dst}")
+                print(f"Saved checkpoint frame {i} ({name}, of {num_frames} total) to {dst}")
             
     # Close the stdin pipe to tell ffmpeg we are done
     if ffmpeg_process.stdin:

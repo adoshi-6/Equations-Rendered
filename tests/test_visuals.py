@@ -1,5 +1,7 @@
 import os
 import glob
+import shutil
+import platform
 import yaml
 import cv2
 import numpy as np
@@ -7,27 +9,64 @@ from PIL import Image
 import imagehash
 import pytesseract
 
-# Set Tesseract path for Windows
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Locate the Tesseract binary in a portable way instead of hardcoding a
+# Windows-only path. Hardcoding C:\Program Files\... meant this test suite
+# would fail immediately if ever run inside a Linux-based Docker container
+# (e.g. as part of the planned n8n automation pipeline).
+_tesseract_path = shutil.which("tesseract")
+if _tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_path
+elif platform.system() == "Windows":
+    _win_default = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    if os.path.exists(_win_default):
+        pytesseract.pytesseract.tesseract_cmd = _win_default
+    else:
+        print(f"WARNING: tesseract not found on PATH and default Windows path {_win_default} does not exist. "
+              f"Set the TESSERACT_CMD environment variable or install Tesseract.")
+else:
+    print("WARNING: tesseract not found on PATH. OCR checks will fail. "
+          "Set the TESSERACT_CMD environment variable or install Tesseract.")
+
+if os.environ.get("TESSERACT_CMD"):
+    pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
+
 
 def compute_ssim(img1, img2):
-    """Compute structural similarity index between two images."""
-    # Convert to grayscale
-    gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-    
-    # Compute SSIM
-    score, _ = cv2.metrics.computeSSIM(gray1, gray2) if hasattr(cv2, 'metrics') else (None, None)
-    if score is None:
-        # Fallback SSIM implementation using skimage if cv2 doesn't have it natively,
-        # or just simple MSE
-        err = np.sum((gray1.astype("float") - gray2.astype("float")) ** 2)
-        err /= float(gray1.shape[0] * gray1.shape[1])
-        # pseudo-SSIM
-        return 1.0 - (err / 255.0**2)
-    return score[0] # Usually returns a tuple or scalar
+    """
+    Computes a genuine Structural Similarity Index (SSIM) between two images
+    using scikit-image, if available.
+
+    NOTE: this function previously attempted `cv2.metrics.computeSSIM`, which
+    does not exist in standard OpenCV builds (there is no `cv2.metrics`
+    module) — so this always silently fell through to a simplistic MSE-based
+    approximation. Worse, this function was never even called anywhere in the
+    file; `fallback_ssim()` (a pure MSE-based pixel-difference score) was used
+    throughout and reported/labeled as "ssim" in all output, despite not
+    being genuine structural similarity. Real SSIM accounts for local
+    luminance/contrast/structure via windowed comparison and is meaningfully
+    harder to fool than a single global MSE number. Fixed to use skimage's
+    real implementation when available, with the old MSE-based approximation
+    only as an explicit, clearly-labeled fallback.
+    """
+    try:
+        from skimage.metrics import structural_similarity as sk_ssim
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+        score = sk_ssim(gray1, gray2)
+        return float(score), "skimage_ssim"
+    except ImportError:
+        return fallback_ssim(img1, img2), "mse_approximation"
+
 
 def fallback_ssim(img1, img2):
+    """
+    A simple MSE-based pixel-difference approximation. NOT genuine SSIM —
+    only measures global average pixel difference, with no awareness of
+    local structure, luminance, or contrast patterns. Used only when
+    scikit-image isn't installed. Two images that differ significantly in
+    structure but have similar average brightness can still score deceptively
+    high here.
+    """
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     err = np.sum((gray1.astype("float") - gray2.astype("float")) ** 2)
@@ -51,7 +90,7 @@ def test_visual_consistency(sim_name, frame_type, test_frame_path, baseline_dir=
     if img_test.shape != img_base.shape:
         return {"passed": False, "error": f"Shape mismatch: {img_test.shape} vs {img_base.shape}"}
         
-    ssim = fallback_ssim(img_test, img_base)
+    ssim, ssim_method = compute_ssim(img_test, img_base)
     
     pil_test = Image.fromarray(cv2.cvtColor(img_test, cv2.COLOR_BGR2RGB))
     pil_base = Image.fromarray(cv2.cvtColor(img_base, cv2.COLOR_BGR2RGB))
@@ -66,6 +105,7 @@ def test_visual_consistency(sim_name, frame_type, test_frame_path, baseline_dir=
     return {
         "passed": passed,
         "ssim": ssim,
+        "ssim_method": ssim_method,  # "skimage_ssim" (real) or "mse_approximation" (weaker fallback)
         "phash_diff": hash_diff
     }
 
@@ -209,16 +249,26 @@ if __name__ == "__main__":
     print("Running test_visuals.py...")
     baseline_dir = "tests/baseline_frames"
     if os.path.exists(baseline_dir):
-        frames = glob.glob(os.path.join(baseline_dir, "*_end.png"))
-        if not frames:
+        # NOTE: previously this only ever globbed "*_end.png" — every prior
+        # "16/16 simulations PASSED" run in this project only checked each
+        # simulation's END frame. Start and mid frames were never included in
+        # the automated OCR/consistency test at all. Fixed to check all three.
+        frame_types = ["start", "mid", "end"]
+        any_frames_found = False
+        for frame_type in frame_types:
+            frames = glob.glob(os.path.join(baseline_dir, f"*_{frame_type}.png"))
+            if not frames:
+                continue
+            any_frames_found = True
+            for f in frames:
+                sim_name = os.path.basename(f).replace(f"_{frame_type}.png", "")
+                print(f"\nTesting {sim_name} ({frame_type}) ...")
+                ocr_res = test_ocr_overlays(sim_name, f, configs_dir="configs")
+                print(f"  OCR: {ocr_res}")
+
+                ssim_res = test_visual_consistency(sim_name, frame_type, f, baseline_dir=baseline_dir)
+                print(f"  Consistency: {ssim_res}")
+        if not any_frames_found:
             print("No frames found!")
-        for f in frames:
-            sim_name = os.path.basename(f).replace("_end.png", "")
-            print(f"\nTesting {sim_name} ...")
-            ocr_res = test_ocr_overlays(sim_name, f, configs_dir="configs")
-            print(f"  OCR: {ocr_res}")
-            
-            ssim_res = test_visual_consistency(sim_name, "end", f, baseline_dir=baseline_dir)
-            print(f"  Consistency: {ssim_res}")
     else:
         print(f"{baseline_dir} not found!")

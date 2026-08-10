@@ -97,7 +97,17 @@ TEST_SPEC = {
         "y": {"min": -30.0, "max": 30.0},
         "z": {"min": 0.0, "max": 100.0}
     },
-    "also_run": ["convergence_dt"]
+    "also_run": ["convergence_dt", "trend_assertions"],
+    # Divergence (std dev of x across the trajectory ensemble) should trend
+    # upward over the render as initially-clustered trajectories separate —
+    # matches the empirically-verified behavior from manual review (divergence
+    # 0.00085 -> 0.00205 -> 0.00253 across early/mid/late frames of a real
+    # render). Max Z is intentionally NOT asserted monotonic here since it's a
+    # genuinely chaotic, non-monotonic quantity — asserting that would produce
+    # false failures on correct renders.
+    "trend_assertions": {
+        "Divergence (σ)": "monotonic_increase"
+    }
 }
 
 def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:

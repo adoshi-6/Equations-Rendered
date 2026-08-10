@@ -114,6 +114,10 @@ TEST_SPEC = {
         "x": {"min": -20.0, "max": 20.0},
         "y": {"min": -25.0, "max": 25.0},
         "z": {"min": 0.0, "max": 50.0}
+    },
+    "also_run": ["trend_assertions"],
+    "trend_assertions": {
+        "Divergence (σ)": "monotonic_increase"
     }
 }
 

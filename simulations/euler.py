@@ -30,9 +30,6 @@ def generate(config: dict):
     
     # 2. Render frames
     w, h = 1080, 1080
-    variable_logs = []
-    logs = []
-    
 
     # PRECOMPUTE BOUNDS (Section 3.6)
     # Trajectory is unit circle: x in [-1, 1], y in [-1, 1].
@@ -75,9 +72,12 @@ def generate(config: dict):
     # We'll put a fixed wall at the left
     draw_hatching(draw_bg, (cx - int(1.333 * radius), cy - 100), (cx - int(1.333 * radius), cy + 100), normal_dir=(1, 0), color=COLOR_AXIS)
     
+    logs = []
+
     def frame_generator():
         for i in range(num_frames):
             t = t_array[i]
+            re, im = re_array[i], im_array[i]
             frame_img = bg.copy()
             draw = ImageDraw.Draw(frame_img)
         
@@ -97,16 +97,22 @@ def generate(config: dict):
             # Draw projections
             draw.line([(px, py), (px, cy)], fill=COLOR_IM, width=2) # vertical (Im)
             draw.line([(px, py), (cx, py)], fill=COLOR_RE, width=2) # horizontal (Re)
+
+            # Log variables incrementally, in lockstep with frame generation.
+            # CRITICAL: this MUST append here (before yield), not in a separate
+            # loop after frame_generator() is defined. renderer.py reads
+            # variable_logs[-1] on every composited frame; if this list were
+            # fully pre-built before any frame is yielded, every single frame
+            # of the rendered video would show the same (final) Angle/Re/Im
+            # values, frozen for the whole render. (This was a real, confirmed
+            # bug — fixed here.)
+            logs.append([
+                {"name": "Angle", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
+                {"name": "Re", "value": f"{re:.2f}", "role": "primary"},
+                {"name": "Im", "value": f"{im:.2f}", "role": "secondary"}
+            ])
         
             yield np.array(frame_img)
-            
-    logs = []
-    for i, (t, re, im) in enumerate(zip(t_array, re_array, im_array)):
-        logs.append([
-            {"name": "Angle", "value": f"{t:.2f} rad", "role": "metric", "metric_index": 0},
-            {"name": "Re", "value": f"{re:.2f}", "role": "primary"},
-            {"name": "Im", "value": f"{im:.2f}", "role": "secondary"}
-        ])
         
     auxiliary_curves = {
         "time": t_array,

@@ -136,7 +136,10 @@ def compute_energy(state_cpu):
 TEST_SPEC = {
     "category": "ode_conservation",
     "conserved_quantities": ["energy"],
-    "also_run": ["convergence_dt"],
+    "also_run": ["convergence_dt", "trend_assertions"],
+    "trend_assertions": {
+        "Divergence (σ)": "monotonic_increase"
+    }
 }
 
 def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:

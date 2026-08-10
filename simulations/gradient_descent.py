@@ -42,7 +42,15 @@ TEST_SPEC = {
         (-3.779310, -3.283186),
         (3.584428, -1.848126)
     ],
-    "tolerance": 0.05
+    "tolerance": 0.05,
+    "also_run": ["trend_assertions"],
+    # Matches the empirically-verified real headless trace from manual review
+    # (Avg Loss: 138.25 -> 83.54 -> 28.22 -> 6.58 -> 0.55 -> 0.00). Now an
+    # automated regression check instead of something that has to be manually
+    # re-verified by eye every time.
+    "trend_assertions": {
+        "Avg Loss": "monotonic_decrease"
+    }
 }
 
 def recommended_duration(config: dict) -> float:
@@ -228,19 +236,22 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             "type": "circle",
             "coords": [sx0, sy0, clip_radius_px],
             "label": "Clip Bound (5.0)",
-            "color": "control"
+            "color": "control",
+            "label_offset": (0, -18),  # pushed up so it clears the two line labels below
         },
         {
             "type": "line",
             "coords": [sx0, sy0, end_x_unclipped, end_y_unclipped],
             "label": "Raw ∇f",
-            "color": "secondary"
+            "color": "secondary",
+            "label_offset": (35, 10),  # stacked below Clip Bound's label, pushed right to clear the circle outline
         },
         {
             "type": "line",
             "coords": [sx0, sy0, end_x_clipped, end_y_clipped],
             "label": "Clipped Step",
-            "color": "primary"
+            "color": "primary",
+            "label_offset": (0, 34),  # stacked below Raw ∇f's label
         }
     ]
 
