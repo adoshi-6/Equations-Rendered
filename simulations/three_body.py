@@ -49,11 +49,24 @@ def three_body_derivs(state, t, m1, m2, m3, G):
     
     return deriv
 
-# Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red (Body 1)
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue (Body 2)
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green (Body 3)
-COLOR_TRAIL = (255, 120, 0)      # Orange (Paths/Trails)
+# Desaturated shared palette, including the new "tertiary" role added
+# specifically for this simulation's third equally-weighted body (see
+# CONVENTIONS.md Section 3.3/8 — this was an open design question, resolved
+# 2026-08-09).
+ROLE_COLORS = {
+    "primary": (232, 93, 74),      # Body 1
+    "secondary": (93, 168, 232),   # Body 2
+    "tertiary": (143, 127, 232),   # Body 3
+    "auxiliary": (127, 174, 107),
+    "control": (212, 194, 74),
+    "static": (168, 181, 194),
+}
+METRIC_COLORS = [
+    (232, 144, 93),
+    (184, 127, 201),
+    (201, 127, 160),
+    (127, 201, 176),
+]
 
 from duration_utils import BoundingBoxPlateauDetector
 
@@ -230,11 +243,42 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     dt = dt_frame / n_substeps
     
     width, height = 1080, 1080
-    center_x, center_y = 540, 540
-    scale = 320.0
-    
+
+    # PRECOMPUTE BOUNDS (Section 3.6): real full-duration headless pass
+    # across ALL THREE bodies combined, replacing the hardcoded
+    # center=(540,540)/scale=320.0.
+    bounds_state = state.copy() if hasattr(state, "copy") else np.array(state)
+    t_b = 0.0
+    x_min = x_max = y_min = y_max = None
+    for f in range(num_frames):
+        for _ in range(n_substeps):
+            bounds_state = rk4_step(three_body_derivs, bounds_state, t_b, dt, m1, m2, m3, G)
+            t_b += dt
+        st_cpu = bounds_state.get() if hasattr(bounds_state, "get") else np.asarray(bounds_state)
+        all_x = np.concatenate([st_cpu[:, 0], st_cpu[:, 4], st_cpu[:, 8]])
+        all_y = np.concatenate([st_cpu[:, 1], st_cpu[:, 5], st_cpu[:, 9]])
+        fx_min, fx_max = float(np.min(all_x)), float(np.max(all_x))
+        fy_min, fy_max = float(np.min(all_y)), float(np.max(all_y))
+        x_min = fx_min if x_min is None else min(x_min, fx_min)
+        x_max = fx_max if x_max is None else max(x_max, fx_max)
+        y_min = fy_min if y_min is None else min(y_min, fy_min)
+        y_max = fy_max if y_max is None else max(y_max, fy_max)
+
+    x_range = max(x_max - x_min, 1e-6)
+    y_range = max(y_max - y_min, 1e-6)
+    margin = 0.10
+    scale = min(
+        width * (1 - 2 * margin) / x_range,
+        height * (1 - 2 * margin) / y_range,
+    )
+    center_x = width / 2 - (x_min + x_max) / 2 * scale
+    center_y = height / 2 + (y_min + y_max) / 2 * scale
+
     trail_history = []
-    max_trail_len = 90
+    # Generalized to scale with actual render length (was previously a
+    # hardcoded 90-frame window, ~2.25s worth of trail — too short to show
+    # the classic figure-8 orbit shape developing over the full render).
+    max_trail_len = num_frames
     
     variable_logs = []
     
@@ -252,11 +296,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             x2, y2 = st_cpu[:, 4], st_cpu[:, 5]
             x3, y3 = st_cpu[:, 8], st_cpu[:, 9]
             
-            # Log divergence metric
+            # Genuine aggregate (std dev of body 1's x across all 50
+            # trajectories) — no single corresponding colored curve.
             std_dev = float(np.std(x1))
-            variable_logs.append({
-                "Divergence (σ)": f"{std_dev:.4f}"
-            })
+            variable_logs.append([
+                {"name": "Divergence (σ)", "value": f"{std_dev:.4f}", "role": "metric", "metric_index": 0},
+            ])
             
             px1, py1 = center_x + x1 * scale, center_y - y1 * scale
             px2, py2 = center_x + x2 * scale, center_y - y2 * scale
@@ -279,18 +324,18 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                     c1x, c1y, c2x, c2y, c3x, c3y = trail_history[h]
                     
                     for i in range(num_trajectories):
-                        draw.line([(p1x[i], p1y[i]), (c1x[i], c1y[i])], fill=COLOR_ROLE_1 + (alpha,), width=2)
-                        draw.line([(p2x[i], p2y[i]), (c2x[i], c2y[i])], fill=COLOR_ROLE_2 + (alpha,), width=2)
-                        draw.line([(p3x[i], p3y[i]), (c3x[i], c3y[i])], fill=COLOR_ROLE_3 + (alpha,), width=2)
+                        draw.line([(p1x[i], p1y[i]), (c1x[i], c1y[i])], fill=ROLE_COLORS["primary"] + (alpha,), width=2)
+                        draw.line([(p2x[i], p2y[i]), (c2x[i], c2y[i])], fill=ROLE_COLORS["secondary"] + (alpha,), width=2)
+                        draw.line([(p3x[i], p3y[i]), (c3x[i], c3y[i])], fill=ROLE_COLORS["tertiary"] + (alpha,), width=2)
                         
             for i in range(num_trajectories):
-                draw.ellipse([px1[i]-2, py1[i]-2, px1[i]+2, py1[i]+2], fill=COLOR_ROLE_1 + (255,))
-                draw.ellipse([px2[i]-2, py2[i]-2, px2[i]+2, py2[i]+2], fill=COLOR_ROLE_2 + (255,))
-                draw.ellipse([px3[i]-2, py3[i]-2, px3[i]+2, py3[i]+2], fill=COLOR_ROLE_3 + (255,))
+                draw.ellipse([px1[i]-2, py1[i]-2, px1[i]+2, py1[i]+2], fill=ROLE_COLORS["primary"] + (255,))
+                draw.ellipse([px2[i]-2, py2[i]-2, px2[i]+2, py2[i]+2], fill=ROLE_COLORS["secondary"] + (255,))
+                draw.ellipse([px3[i]-2, py3[i]-2, px3[i]+2, py3[i]+2], fill=ROLE_COLORS["tertiary"] + (255,))
                 
-            draw.ellipse([px1[0]-8, py1[0]-8, px1[0]+8, py1[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
-            draw.ellipse([px2[0]-8, py2[0]-8, px2[0]+8, py2[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_2 + (255,), width=2)
-            draw.ellipse([px3[0]-8, py3[0]-8, px3[0]+8, py3[0]+8], fill=(255, 255, 255, 255), outline=COLOR_ROLE_3 + (255,), width=2)
+            draw.ellipse([px1[0]-8, py1[0]-8, px1[0]+8, py1[0]+8], fill=(255, 255, 255, 255), outline=ROLE_COLORS["primary"] + (255,), width=2)
+            draw.ellipse([px2[0]-8, py2[0]-8, px2[0]+8, py2[0]+8], fill=(255, 255, 255, 255), outline=ROLE_COLORS["secondary"] + (255,), width=2)
+            draw.ellipse([px3[0]-8, py3[0]-8, px3[0]+8, py3[0]+8], fill=(255, 255, 255, 255), outline=ROLE_COLORS["tertiary"] + (255,), width=2)
             
             yield np.array(img.convert("RGB"))
             

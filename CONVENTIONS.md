@@ -22,19 +22,6 @@
 - When a bug is found, state the actual root cause once confirmed (via logs, a traceback,
   or a direct test) — not a plausible-sounding guess offered as if it were the confirmed
   cause.
-- **Flawed or superseded frames/renders are archived, never deleted.** Move them to
-  something like `output/archive/` or rename with a marker (e.g.
-  `electric_field_v3_BROKEN_raw_latex.png`) and a short note of why it was flawed —
-  don't remove the file. Retained evidence of past mistakes has repeatedly been what
-  made it possible to catch problems in this project: comparing a new claim against an
-  old frame is how several reused/stale-frame issues were caught, and unrounded values
-  traced back through a render were what resolved the double_pendulum energy question.
-  Deleting flawed output as soon as it's identified removes the exact material that
-  makes future verification possible, and creates an incentive to erase evidence of
-  mistakes rather than retain a record of them. This applies to renders proven wrong,
-  not to genuinely disposable intermediate files (e.g. a temp buffer superseded by a
-  final output within the same run) — that's ordinary storage hygiene, not an evidence
-  question.
 
 ---
 
@@ -129,7 +116,7 @@ ROLE_COLORS = {
     "secondary": "#5DA8E8",    # powder blue — comparison trajectory
     "auxiliary": "#7FAE6B",    # sage green — derived/aux curve
     "control": "#D4C24A",      # muted yellow — tunable parameter
-    "static": "#A8B5C2",       # pale blue-grey — fixed parameter
+    "static": "#CFCFCF",       # off-white — fixed parameter
 }
 ```
 
@@ -138,29 +125,9 @@ corresponding colored element** (e.g. gradient_descent's Avg Loss/Avg Gradient,
 which describe all four trajectories collectively). Pulled from an ordered
 palette by index:
 
-> **Color-conflict resolution (this round):** three near-collisions were found
-> and fixed:
-> 1. `static` was `#CFCFCF` (off-white) — too close to both the axis-line grey
->    and, briefly, the separator-pipe grey. Moved off the grey axis entirely to
->    a pale blue-grey (`#A8B5C2`), so it no longer competes with any neutral/
->    structural element.
-> 2. Axis lines (Section 3.5) were `#B0B0B0`, the same tone `static` used to
->    sit near. Since `static` moved to blue-grey, this collision resolves on
->    its own — axis lines remain `#B0B0B0`, no longer contested.
-> 3. `METRIC_COLORS[0]` (`#E86B5D`, coral) was nearly identical to `primary`
->    (`#E85D4A`, soft red) — close enough that a `primary`-colored trajectory
->    and an unrelated `METRIC_COLORS[0]`-tagged metric in the same frame could
->    look like the same color, implying a false correspondence. Shifted
->    `METRIC_COLORS[0]` to warm amber (`#E8905D`), clearly distinct from
->    `primary` while staying in the same warm-tone family as the rest of
->    `METRIC_COLORS`.
->
-> `primary` and the pipe color (`#FFFFFF`, below) were left unchanged —
-> resolving `static` and `METRIC_COLORS[0]` removed the need to touch either.
-
 ```python
 METRIC_COLORS = [
-    "#E8905D",  # warm amber — metric 0 (shifted from near-duplicate coral, see below)
+    "#E86B5D",  # coral — metric 0
     "#B87FC9",  # dusty purple — metric 1
     "#C97FA0",  # muted rose — metric 2
     "#7FC9B0",  # muted teal — metric 3
@@ -185,16 +152,6 @@ METRIC_COLORS = [
 > rather than defaulting to `METRIC_COLORS`. This classification must appear in
 > the Section 6.1 pre-implementation checklist for each simulation, before any
 > render is sent for review.
->
-> **Confirmed violation, fixed:** Euler's Formula readout displayed `Re` and
-> `Im` both in the same generic/static grey, despite `Re` corresponding
-> directly to the `cos(t)` curve and `Im` corresponding directly to the
-> `sin(t)` curve in the same frame's trig plot — a textbook 1:1-correspondence
-> case that should have used those curves' exact `ROLE_COLORS` hexes from the
-> start. Fixed by tagging `Re` with the `cos(t)` curve's color and `Im` with
-> the `sin(t)` curve's color. When auditing any already-migrated simulation,
-> check specifically for this failure mode: a value that clearly maps to one
-> plot element but was left on a generic/shared/static color instead.
 
 - Every `variable_log` entry must have a `role`. If `role == "metric"`, it must
   also have a `metric_index` (see schema, Section 5).
@@ -203,11 +160,8 @@ METRIC_COLORS = [
   against the hex values above, not visual impression alone (muted colors can
   still look vivid against a near-black background at thin line widths — this
   is expected, not a bug; confirm via pixel value, not perception).
-- Metric-separator pipes (`|`) between readout values: white (`#FFFFFF`),
-  not inherited text color. (Originally light grey `#B0B0B0`; changed to white
-  after that grey was found too close to `static`'s old off-white — see the
-  color-conflict resolution note above for the full fix, which also moved
-  `static` itself off grey.)
+- Metric-separator pipes (`|`) between readout values: neutral light grey
+  `#B0B0B0` (same tone as axis lines, Section 3.5), not inherited text color.
 
 ### 3.4 Pedagogical Annotations
 - Optional per simulation — only add where there's a genuine equation-to-visual
@@ -437,81 +391,3 @@ a new case:**
   than 4 distinct simultaneous aggregate metrics has no defined behavior yet —
   decide (extend the palette vs. consolidate metrics) before hitting this in
   practice, rather than mid-implementation.
-
----
-
-## 9. Automation & Pipeline Requirements (n8n)
-
-> Added after a caption/frame mismatch traced to a chat message being
-> hand-authored from memory (old checkpoint numbers) rather than generated
-> from the actual current render data. The specific failure mode (typing a
-> markdown caption in chat) won't recur once there's no more manual chat
-> reporting step — but the underlying risk generalizes to anything in the
-> automated pipeline that turns data into human-readable text, so the rule
-> below is written for that context specifically.
-
-### 9.1 Generated Text Must Be Templated From Real Data, Never Freeform
-
-Any pipeline step that produces human-readable text describing a render
-(YouTube title/description/tags, Telegram notification content, tracking
-Sheet entries, log summaries) must build that text by templating directly
-from actual source data — the provenance JSON, `variable_log` values,
-`TEST_SPEC` pass/fail results — not by having an LLM recall, summarize, or
-freely describe "what this video is probably about."
-
-- Correct pattern: an f-string or template pulling real fields, e.g.
-  `f"Avg Loss: {data['avg_loss']} | Avg Gradient: {data['avg_gradient']}"`
-  reading from the actual JSON produced by that render.
-- Incorrect pattern: an LLM step writing "this video shows the loss
-  converging to approximately X" from context/memory rather than being handed
-  the exact current value to insert.
-- **Reserve LLM/vision-model steps for genuine subjective judgment only** —
-  does this annotation look legible, does this composition look clean, does
-  this pass a plausibility check a human would make. Anywhere a numeric or
-  factual answer already exists in a JSON file, use code to insert it, not a
-  model to restate it. This is the same distinction as Section 6.4's division
-  of labor (automate the mechanical, keep humans/judgment-models on genuine
-  judgment calls) — applied specifically to text generation, where the
-  temptation to let a model "just describe it" is highest.
-- This rule applies to every step in the n8n pipeline design (Telegram
-  notification content, metadata generation, tracking Sheet writes) — verify
-  each one is reading real values before it goes live, not after a bad
-  notification is caught.
-
-### 9.2 Telegram Approval Notification — Full Video Required
-
-The Telegram approve/waitlist notification must include the **full rendered
-video file**, not a selection of sample frames (start/mid/end or otherwise).
-Frame sampling is a useful shorthand for chat-based review during development,
-but the actual approval decision in production should be made against the
-complete video — approving based on a few still frames risks missing issues
-that only appear in motion (stutter, pacing problems, an annotation that's
-fine in three sampled frames but breaks somewhere else in the sequence).
-
-- The daily upload cap (6/day, per Section 9.3) means approval volume is low
-  enough that sending full video files over Telegram is practical — no need
-  to compromise on review quality to save bandwidth.
-- If file size becomes a practical constraint, compress for delivery but do
-  not fall back to frame-sampling as a substitute for full-video review.
-
-### 9.3 YouTube API Quota Constraint (confirmed against official Google docs,
-last verified 2025-08-21)
-
-- Default daily quota: 10,000 units per Google Cloud project, resets midnight
-  Pacific Time.
-- `videos.insert` (the upload call): **1,600 units per call.**
-- Maximum uploads per day on default quota: **6** (10,000 ÷ 1,600 = 6.25,
-  floored).
-- **The daily publish cap in the n8n pipeline must be hardcoded to 6, not
-  left open or guessed.** This resolves the "daily cap TBD" item from the
-  original pipeline design notes.
-- Every other API call in the pipeline (Sheet writes, status checks, any
-  `videos.list` metadata calls) draws from the same 10,000-unit pool as
-  uploads. Log actual quota consumption per pipeline run rather than assuming
-  the non-upload calls are negligible — a pipeline that checks video status
-  or metadata multiple times per upload could meaningfully eat into the
-  remaining budget.
-- The only path to a higher cap is Google's manual Quota Extension audit
-  form — no self-serve option, no guaranteed approval or timeline. If demand
-  is expected to exceed 6/day, apply well before actually hitting the wall,
-  not after.

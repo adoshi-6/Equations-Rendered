@@ -24,10 +24,19 @@ def rossler_derivs(state, t, a, b, c):
     deriv[:, 2] = dz
     return deriv
 
-COLOR_ROLE_1 = (255, 50, 50)
-COLOR_ROLE_2 = (50, 150, 255)
-COLOR_ROLE_3 = (50, 255, 50)
-COLOR_TRAIL = (255, 120, 0)
+ROLE_COLORS = {
+    "primary": (232, 93, 74),
+    "secondary": (93, 168, 232),
+    "auxiliary": (127, 174, 107),
+    "control": (212, 194, 74),
+    "static": (168, 181, 194),
+}
+METRIC_COLORS = [
+    (232, 144, 93),
+    (184, 127, 201),
+    (201, 127, 160),
+    (127, 201, 176),
+]
 
 def recommended_duration(config: dict) -> float:
     a, b, c = 0.2, 0.2, 5.7
@@ -118,30 +127,63 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     a, b, c = 0.2, 0.2, 5.7
     num_trajectories = 200
     
+    dt_frame = 1.0 / fps
+    n_substeps = 15
+    dt = dt_frame / n_substeps
+
+    width, height = 1080, 1080
+
+    # PRECOMPUTE BOUNDS (Section 3.6): real full-duration headless pass,
+    # replacing the previously-hardcoded center=(540,580)/scale=18.0 (values
+    # shared byte-for-byte with lorenz.py, suggesting copy-paste rather than
+    # individual tuning, and never re-verified against actual render output).
+    # Projection here uses (x, y) only — z is tracked separately for "Max Z"
+    # but isn't part of the 2D projection, so only x/y extent is needed.
+    bounds_state = xp.zeros((num_trajectories, 3))
+    bounds_state[:, 0] = 1.0 + xp.linspace(-1e-3, 1e-3, num_trajectories)
+    bounds_state[:, 1] = 1.0
+    bounds_state[:, 2] = 1.0
+    t_b = 0.0
+    x_min = x_max = y_min = y_max = None
+    for f in range(num_frames):
+        for _ in range(n_substeps):
+            bounds_state = rk4_step(rossler_derivs, bounds_state, t_b, dt, a, b, c)
+            t_b += dt
+        st_cpu = bounds_state.get() if hasattr(bounds_state, "get") else np.asarray(bounds_state)
+        bx, by = st_cpu[:, 0], st_cpu[:, 1]
+        fx_min, fx_max = float(np.min(bx)), float(np.max(bx))
+        fy_min, fy_max = float(np.min(by)), float(np.max(by))
+        x_min = fx_min if x_min is None else min(x_min, fx_min)
+        x_max = fx_max if x_max is None else max(x_max, fx_max)
+        y_min = fy_min if y_min is None else min(y_min, fy_min)
+        y_max = fy_max if y_max is None else max(y_max, fy_max)
+
+    x_range = max(x_max - x_min, 1e-6)
+    y_range = max(y_max - y_min, 1e-6)
+    margin = 0.10
+    scale = min(
+        width * (1 - 2 * margin) / x_range,
+        height * (1 - 2 * margin) / y_range,
+    )
+    center_x = width / 2 - (x_min + x_max) / 2 * scale
+    center_y = height / 2 + (y_min + y_max) / 2 * scale
+
     state = xp.zeros((num_trajectories, 3))
     state[:, 0] = 1.0 + xp.linspace(-1e-3, 1e-3, num_trajectories)
     state[:, 1] = 1.0
     state[:, 2] = 1.0
     
-    dt_frame = 1.0 / fps
-    n_substeps = 15
-    dt = dt_frame / n_substeps
-    
-    width, height = 1080, 1080
-    center_x, center_y = 540, 580
-    scale = 18.0
-    
     trail_history = []
-    max_trail_len = 800
+    # Generalized to scale with actual render length (was previously a
+    # verified-correct but hardcoded 800, tuned for one specific duration).
+    max_trail_len = num_frames
     
     variable_logs = []
     
     def get_trail_color(i, n):
         t = i / max(1, n - 1)
-        r = int(COLOR_ROLE_2[0] * (1 - t) + COLOR_ROLE_1[0] * t)
-        g = int(COLOR_ROLE_2[1] * (1 - t) + COLOR_ROLE_1[1] * t)
-        b = int(COLOR_ROLE_2[2] * (1 - t) + COLOR_ROLE_1[2] * t)
-        return (r, g, b)
+        c1, c2 = ROLE_COLORS["secondary"], ROLE_COLORS["primary"]
+        return tuple(int(c1[k] * (1 - t) + c2[k] * t) for k in range(3))
     
     def frame_generator():
         print("Simulating Rössler Attractor trajectories...")
@@ -157,10 +199,12 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             std_dev = float(np.std(st_cpu[:, 0]))
             max_z = float(np.max(st_cpu[:, 2]))
             
-            variable_logs.append({
-                "Max Z": f"{max_z:.2f}",
-                "Divergence (σ)": f"{std_dev:.5f}"
-            })
+            # Both are genuine aggregates across all 200 trajectories — no
+            # single corresponding colored curve — so METRIC_COLORS applies.
+            variable_logs.append([
+                {"name": "Max Z", "value": f"{max_z:.2f}", "role": "metric", "metric_index": 0},
+                {"name": "Divergence (σ)", "value": f"{std_dev:.5f}", "role": "metric", "metric_index": 1},
+            ])
             
             # Projection: use x and y
             px = center_x + st_cpu[:, 0] * scale
@@ -192,7 +236,7 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             for i in range(num_trajectories):
                 draw.ellipse(
                     [px[i]-3, py[i]-3, px[i]+3, py[i]+3],
-                    fill=COLOR_ROLE_3 + (255,)
+                    fill=ROLE_COLORS["auxiliary"] + (255,)
                 )
                 
             yield np.array(img.convert("RGB"))

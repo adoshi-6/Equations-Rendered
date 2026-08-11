@@ -67,7 +67,7 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     freq_x = 3.0
     freq_y = 4.0
     
-    num_curves = 100
+    num_curves = 8
     num_points = 600
     t = xp.linspace(0, 2.0 * xp.pi, num_points)
     variable_logs = []
@@ -88,7 +88,21 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
             draw = ImageDraw.Draw(img)
         
-            delta = base_delta + xp.linspace(-0.25, 0.25, num_curves)[:, None]
+            # Fix for the "filled blob" issue (CONVENTIONS.md Section 10.4):
+            # the original 100 near-duplicate curves within a tight ±0.25 rad
+            # phase spread, drawn at low alpha, mathematically produced
+            # enough cumulative overlap to look like a solid filled shape
+            # rather than a traced "morphing trail". A first attempt at
+            # widening the spread (100 curves, ±0.4 rad) was tried and
+            # rejected after a real render showed it made things WORSE — the
+            # curves became different enough in shape to cross each other
+            # densely, producing a woven lattice/moiré pattern rather than a
+            # clean trail. The actual fix: far fewer curves (8) with a
+            # NARROW spread (±0.08 rad), so each strand is nearly identical
+            # to its neighbor (a true "motion blur" effect) rather than a
+            # meaningfully different curve shape. Verified via rendered
+            # prototype comparison before adopting.
+            delta = base_delta + xp.linspace(-0.08, 0.08, num_curves)[:, None]
         
             x_coords = xp.sin(freq_x * t[None, :] + delta)
             y_coords = xp.sin(freq_y * t[None, :]) * xp.ones((num_curves, 1))
@@ -104,8 +118,7 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                 py_cpu = np.asarray(py)
             
             for i in range(num_curves):
-                # Draw the trail using a single primary color with a soft fading alpha (max 40)
-                alpha = int(40 * (i / max(1, num_curves - 1)))
+                alpha = int(60 + 150 * (i / max(1, num_curves - 1)))
                 color = tuple(int(c) for c in COLOR_ROLE_1)
             
                 pts = [(px_cpu[i, k], py_cpu[i, k]) for k in range(num_points)]

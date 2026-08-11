@@ -7,10 +7,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import xp
 
-COLOR_ROLE_1 = (255, 50, 50)
-COLOR_ROLE_2 = (50, 150, 255)
-COLOR_ROLE_3 = (50, 255, 50)
-COLOR_TRAIL = (255, 120, 0)
+ROLE_COLORS = {
+    "primary": (232, 93, 74),
+    "secondary": (93, 168, 232),
+    "auxiliary": (127, 174, 107),
+    "control": (212, 194, 74),
+    "static": (168, 181, 194),
+}
 
 def recommended_duration(config: dict) -> float:
     return 15.0
@@ -80,9 +83,24 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     dt = 1.0 / fps
     
     width, height = 1080, 1080
-    center_x, center_y = 540, 540
-    scale = 35.0
-    
+
+    # Bounds (Section 3.6): unlike the chaotic-ODE simulations, this
+    # diffusion process has an EXACT analytic growth law — variance grows
+    # linearly as 2*D*t (this is literally what TEST_SPEC's ensemble_stats
+    # check verifies against real simulation output). That means the correct
+    # scale can be derived directly, without an expensive numerical pre-pass:
+    # std at the end of the render is sqrt(2*D*duration), and with 3000
+    # particles sampled from a Gaussian, outliers can reasonably reach ~4.5
+    # standard deviations. Previously this was a flat hardcoded scale=35.0
+    # that happened to fit at the one duration it was tuned for (15s) purely
+    # by coincidence — a longer render would have pushed outlier particles
+    # toward/past the frame edge.
+    sigma_max = float(np.sqrt(2 * D * duration))
+    half_extent = 4.5 * sigma_max
+    margin = 0.10
+    scale = (min(width, height) * (1 - 2 * margin)) / (2 * half_extent)
+    center_x, center_y = width / 2, height / 2
+
     state = xp.zeros((num_particles, 2))
     variable_logs = []
     
@@ -103,11 +121,14 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             var_x = float(np.var(st_cpu[:, 0]))
             var_y = float(np.var(st_cpu[:, 1]))
         
-            variable_logs.append({
-                "Time (t)": f"{t_curr:.2f} s",
-                "Variance (X)": f"{var_x:.2f}",
-                "Variance (Y)": f"{var_y:.2f}"
-            })
+            # All three are genuine aggregates across the 3000-particle
+            # ensemble (no single corresponding colored curve) -> metric,
+            # each with a distinct METRIC_COLORS index.
+            variable_logs.append([
+                {"name": "Time (t)", "value": f"{t_curr:.2f} s", "role": "metric", "metric_index": 0},
+                {"name": "Variance (X)", "value": f"{var_x:.2f}", "role": "metric", "metric_index": 1},
+                {"name": "Variance (Y)", "value": f"{var_y:.2f}", "role": "metric", "metric_index": 2},
+            ])
         
             px = center_x + st_cpu[:, 0] * scale
             py = center_y - st_cpu[:, 1] * scale
@@ -116,7 +137,7 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             draw = ImageDraw.Draw(img, "RGBA")
         
             for i in range(num_particles):
-                draw.ellipse([px[i]-2, py[i]-2, px[i]+2, py[i]+2], fill=COLOR_ROLE_2 + (150,))
+                draw.ellipse([px[i]-2, py[i]-2, px[i]+2, py[i]+2], fill=ROLE_COLORS["secondary"] + (150,))
             
             yield np.array(img)
         

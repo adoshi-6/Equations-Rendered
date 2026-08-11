@@ -25,11 +25,27 @@ TEST_SPEC = {
     ],
 }
 
-# Universal Palette
-COLOR_ROLE_1 = xp.array([255.0, 50.0, 50.0])     # Bright Red
-COLOR_ROLE_2 = xp.array([50.0, 150.0, 255.0])    # Electric Blue
-COLOR_ROLE_3 = xp.array([50.0, 255.0, 50.0])     # Neon Green
-COLOR_TRAIL = xp.array([255.0, 120.0, 0.0])      # Orange
+# Desaturated shared palette
+ROLE_COLORS = {
+    "primary": xp.array([232.0, 93.0, 74.0]),
+    "secondary": xp.array([93.0, 168.0, 232.0]),
+    "auxiliary": xp.array([127.0, 174.0, 107.0]),
+    "control": xp.array([212.0, 194.0, 74.0]),
+    "static": xp.array([168.0, 181.0, 194.0]),
+}
+METRIC_COLORS_RGB = [
+    (232, 144, 93),
+    (184, 127, 201),
+    (201, 127, 160),
+    (127, 201, 176),
+]
+# Base colors for the fractal's own cyclic iteration-count palette — this is
+# a distinct concept from ROLE_COLORS (no single "role" maps to a fractal's
+# escape-time coloring), so it keeps its own cyclic blend, just shifted into
+# the same desaturated hue family instead of pure neon.
+FRACTAL_COLOR_1 = xp.array([93.0, 168.0, 232.0])   # secondary blue
+FRACTAL_COLOR_2 = xp.array([127.0, 174.0, 107.0])  # auxiliary green
+FRACTAL_COLOR_3 = xp.array([232.0, 144.0, 93.0])   # metric0 amber
 
 def recommended_duration(config: dict) -> float:
     """
@@ -57,9 +73,9 @@ def get_palette_color(t, active):
     w3 = (xp.sin(2 * xp.pi * t_3d + 4 * xp.pi / 3) + 1) / 2
     
     # Base colors (reshaped for broadcasting)
-    c1 = COLOR_ROLE_2[None, None, :] # Blue
-    c2 = COLOR_ROLE_3[None, None, :] # Green
-    c3 = COLOR_TRAIL[None, None, :]  # Orange
+    c1 = FRACTAL_COLOR_1[None, None, :]
+    c2 = FRACTAL_COLOR_2[None, None, :]
+    c3 = FRACTAL_COLOR_3[None, None, :]
     
     color = (w1 * c1 + w2 * c2 + w3 * c3) / (w1 + w2 + w3)
     
@@ -118,12 +134,18 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                 if not xp.any(active):
                     break
                 
-            # Calculate current zoom level for logs
+            # Calculate current zoom level for logs.
+            # Zoom Depth is a genuine aggregate (no single corresponding
+            # element) -> metric. Max Iterations is a fixed constant that
+            # never changes across the render -> static, not metric
+            # (reclassified from an earlier miscategorization — a value
+            # that never varies shouldn't share the "metric" role meant for
+            # dynamic aggregate readouts).
             zoom_level = 3.0 / w
-            variable_logs.append({
-                "Zoom Depth": f"{zoom_level:.1f}x",
-                "Max Iterations": str(max_iter)
-            })
+            variable_logs.append([
+                {"name": "Zoom Depth", "value": f"{zoom_level:.1f}x", "role": "metric", "metric_index": 0},
+                {"name": "Max Iterations", "value": str(max_iter), "role": "static"},
+            ])
         
             escaped_mask = ~active
             if xp.any(escaped_mask):

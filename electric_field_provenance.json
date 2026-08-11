@@ -1,0 +1,30 @@
+{
+    "simulation": "electric_field",
+    "timestamp": "2026-08-08T21:04:19.084347",
+    "config": {
+        "title": "Electric Field Lines",
+        "equation": "\\vec{E} = \\frac{1}{4\\pi\\epsilon_0} \\sum_i q_i \\frac{\\vec{r} - \\vec{r}_i}{|\\vec{r} - \\vec{r}_i|^3}",
+        "simulation": "electric_field",
+        "fps": 30,
+        "duration": 10.0
+    },
+    "commit": "0d23ded56241b7fa9353d3de765b7330869e881f",
+    "environment": {
+        "python": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+        "os": "nt"
+    },
+    "ocr_bboxes": {
+        "title_bbox": {
+            "y1": 160,
+            "y2": 250,
+            "x1": 191.0,
+            "x2": 888.0
+        },
+        "equation_bbox": {
+            "y1": 1436,
+            "y2": 1765,
+            "x1": 40,
+            "x2": 1040
+        }
+    }
+}

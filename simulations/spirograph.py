@@ -8,11 +8,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import xp
 
-# Universal Palette
-COLOR_ROLE_1 = (255, 50, 50)     # Bright Red
-COLOR_ROLE_2 = (50, 150, 255)    # Electric Blue
-COLOR_ROLE_3 = (50, 255, 50)     # Neon Green
-COLOR_TRAIL = (255, 120, 0)      # Orange
+ROLE_COLORS = {
+    "primary": (232, 93, 74),
+    "secondary": (93, 168, 232),
+    "auxiliary": (127, 174, 107),
+    "control": (212, 194, 74),
+    "static": (168, 181, 194),
+}
 
 def evaluate_point(inp):
     theta = inp["theta"]
@@ -39,20 +41,17 @@ def recommended_duration(config: dict) -> float:
 
 def get_gradient_color(t):
     """
-    Generates a gradient using the universal palette (Red -> Blue -> Green).
+    Generates a gradient using the desaturated shared palette
+    (primary -> secondary -> auxiliary).
     t is the normalized position along the curve [0, 1].
     """
     if t < 0.5:
         f = t * 2.0
-        r = int(COLOR_ROLE_1[0] * (1.0 - f) + COLOR_ROLE_2[0] * f)
-        g = int(COLOR_ROLE_1[1] * (1.0 - f) + COLOR_ROLE_2[1] * f)
-        b = int(COLOR_ROLE_1[2] * (1.0 - f) + COLOR_ROLE_2[2] * f)
+        c1, c2 = ROLE_COLORS["primary"], ROLE_COLORS["secondary"]
     else:
         f = (t - 0.5) * 2.0
-        r = int(COLOR_ROLE_2[0] * (1.0 - f) + COLOR_ROLE_3[0] * f)
-        g = int(COLOR_ROLE_2[1] * (1.0 - f) + COLOR_ROLE_3[1] * f)
-        b = int(COLOR_ROLE_2[2] * (1.0 - f) + COLOR_ROLE_3[2] * f)
-    return (r, g, b)
+        c1, c2 = ROLE_COLORS["secondary"], ROLE_COLORS["auxiliary"]
+    return tuple(int(c1[k] * (1.0 - f) + c2[k] * f) for k in range(3))
 
 def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
     """
@@ -99,10 +98,15 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             theta_t = progress * max_theta
         
             # Log variable
-            variable_logs.append({
-                "Rotor θ": f"{float(theta_t):.2f} rad",
-                "Ratio R/r": f"{R/r:.2f}"
-            })
+            # Rotor θ varies every frame -> metric. Ratio R/r is a fixed
+            # constant (300/180, never changes across the render) -> static,
+            # not metric (same reclassification reasoning as mandelbrot's
+            # Max Iterations — a value that never varies shouldn't share the
+            # "metric" role meant for dynamic aggregate readouts).
+            variable_logs.append([
+                {"name": "Rotor θ", "value": f"{float(theta_t):.2f} rad", "role": "metric", "metric_index": 0},
+                {"name": "Ratio R/r", "value": f"{R/r:.2f}", "role": "static"},
+            ])
         
             cx = center_x + (R - r) * np.cos(theta_t)
             cy = center_y - (R - r) * np.sin(theta_t)
@@ -130,7 +134,7 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
                         width=3
                     )
                 
-            draw.ellipse([pen_x - 5, pen_y - 5, pen_x + 5, pen_y + 5], fill=(255, 255, 255, 255), outline=COLOR_ROLE_1 + (255,), width=2)
+            draw.ellipse([pen_x - 5, pen_y - 5, pen_x + 5, pen_y + 5], fill=(255, 255, 255, 255), outline=ROLE_COLORS["primary"] + (255,), width=2)
         
             yield np.array(img.convert("RGB"))
         

@@ -2,12 +2,21 @@ import os
 import glob
 import shutil
 import platform
+import sys
 import yaml
 import cv2
 import numpy as np
 from PIL import Image
 import imagehash
 import pytesseract
+
+# Same UTF-8 stdout fix as renderer.py / run_physics_tests.py — this module
+# prints equation strings and OCR results that routinely contain Greek
+# letters (e.g. "\theta", "\sigma"), which crashes on Windows' default
+# cp1252 console encoding.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Locate the Tesseract binary in a portable way instead of hardcoding a
 # Windows-only path. Hardcoding C:\Program Files\... meant this test suite

@@ -1,0 +1,30 @@
+{
+    "simulation": "lissajous",
+    "timestamp": "2026-08-08T21:34:28.449793",
+    "config": {
+        "title": "Lissajous Curve Morph",
+        "equation": "x = \\sin(3t + \\delta), \\; y = \\sin(4t)",
+        "simulation": "lissajous",
+        "fps": 30,
+        "duration": 10.0
+    },
+    "commit": "0d23ded56241b7fa9353d3de765b7330869e881f",
+    "environment": {
+        "python": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+        "os": "nt"
+    },
+    "ocr_bboxes": {
+        "title_bbox": {
+            "y1": 160,
+            "y2": 250,
+            "x1": 112.0,
+            "x2": 967.0
+        },
+        "equation_bbox": {
+            "y1": 1436,
+            "y2": 1765,
+            "x1": 40,
+            "x2": 1040
+        }
+    }
+}

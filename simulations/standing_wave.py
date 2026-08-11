@@ -5,9 +5,19 @@ from PIL import Image, ImageDraw
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-COLOR_WAVE1 = "#FF7F50"
-COLOR_WAVE2 = "#4169E1"
-COLOR_SUM = "#32FF32"
+ROLE_COLORS = {
+    "primary": "#E85D4A",
+    "secondary": "#5DA8E8",
+    "auxiliary": "#7FAE6B",
+    "control": "#D4C24A",
+    "static": "#A8B5C2",
+}
+# Mapped from the desaturated shared palette rather than the old
+# COLOR_WAVE1="#FF7F50"/COLOR_WAVE2="#4169E1"/COLOR_SUM="#32FF32" (coral,
+# royal blue, neon green).
+COLOR_WAVE1 = ROLE_COLORS["primary"]
+COLOR_WAVE2 = ROLE_COLORS["secondary"]
+COLOR_SUM = ROLE_COLORS["auxiliary"]
 
 def recommended_duration(config: dict) -> float:
     return 15.0
@@ -57,10 +67,17 @@ def generate(config: dict) -> tuple[list[np.ndarray], list[dict]]:
             y2 = np.sin(x + t)
             y_sum = y1 + y2
         
-            variable_logs.append({
-                "Time (t)": f"{t:.2f} s",
-                "Amplitude (x=π/2)": f"{np.sin(x0 - t) + np.sin(x0 + t):.2f}"
-            })
+            # Time (t): genuine aggregate, no single corresponding curve ->
+            # metric. Amplitude (x=π/2): this literally measures the height
+            # of the y_sum curve at that x-position -> a direct 1:1
+            # correspondence, so it uses the sum curve's own color
+            # ("auxiliary") rather than a generic metric color, per the
+            # ROLE_COLORS-vs-METRIC_COLORS correspondence rule (same
+            # reasoning as Euler's Re/Im matching their respective curves).
+            variable_logs.append([
+                {"name": "Time (t)", "value": f"{t:.2f} s", "role": "metric", "metric_index": 0},
+                {"name": "Amplitude (x=π/2)", "value": f"{np.sin(x0 - t) + np.sin(x0 + t):.2f}", "role": "auxiliary"},
+            ])
         
             img = Image.new("RGBA", (width, height), (0, 0, 0, 255))
             draw = ImageDraw.Draw(img)

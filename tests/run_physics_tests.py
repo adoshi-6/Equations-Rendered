@@ -3,6 +3,19 @@ import sys
 import importlib
 import inspect
 
+# Force UTF-8 stdout regardless of the OS default console codepage. Without
+# this, Windows' default cp1252 console encoding cannot print the Greek
+# letters used in several variable names (e.g. "Divergence (σ)", used by
+# lorenz/rossler/three_body/double_pendulum's trend_assertions output),
+# crashing the entire test run with a UnicodeEncodeError partway through —
+# confirmed as a real failure on Windows during verification, not a
+# hypothetical. This makes the test runner's output encoding-safe on any
+# platform rather than only ever having been exercised on a UTF-8-default
+# Linux environment.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import physics_framework

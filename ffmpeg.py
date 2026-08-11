@@ -46,10 +46,23 @@ def compile_video(frame_pattern: str, audio_path: str | None, output_path: str, 
     else:
         print(f"Successfully compiled video to {output_path}")
 
-def start_ffmpeg_process(output_path: str, fps: int = 30, audio_path: str | None = None, width: int = 1080, height: int = 1920) -> subprocess.Popen:
+def start_ffmpeg_process(output_path: str, fps: int = 30, audio_path: str | None = None, width: int = 1080, height: int = 1920):
     """
     Starts an FFmpeg process configured to read raw RGB frames from stdin.
-    Returns the Popen object so frames can be piped into process.stdin.write(raw_bytes).
+    Returns (Popen object, log_file_path) so the caller can pipe frames via
+    process.stdin.write(raw_bytes), and after the process exits, read the
+    log file for diagnostics or close it explicitly.
+
+    NOTE: previously this function opened `log_file` and passed it as
+    `stderr=log_file` to Popen, but never returned or otherwise exposed the
+    file handle to the caller — it was never explicitly closed. Additionally,
+    `Popen.stderr` is None whenever stderr is redirected to a real file
+    (rather than `subprocess.PIPE`), so renderer.py's failure-handling code
+    (`ffmpeg_process.stderr.read() if ffmpeg_process.stderr else "Unknown
+    error"`) always silently fell through to "Unknown error" on failure,
+    even though the real ffmpeg error message was sitting in the log file on
+    disk the whole time. Fixed by returning the log file path so the caller
+    can read it back on failure and close the handle explicitly on success.
     """
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -81,4 +94,10 @@ def start_ffmpeg_process(output_path: str, fps: int = 30, audio_path: str | None
     log_file_path = output_path + ".ffmpeg.log"
     log_file = open(log_file_path, "w")
     print(f"Starting ffmpeg stream: {' '.join(cmd)}")
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log_file)
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log_file)
+    # Stash the handle on the process object so the caller can close it
+    # explicitly once the process has exited (can't close it here — ffmpeg
+    # is still writing to it as frames stream in).
+    process._claude_log_file = log_file
+    process._claude_log_path = log_file_path
+    return process

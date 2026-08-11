@@ -9,6 +9,14 @@ import datetime
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
+# Same UTF-8 stdout fix as tests/run_physics_tests.py — several simulations
+# print names/status text containing non-ASCII characters (e.g. "Rössler
+# Attractor"), which crashes on Windows' default cp1252 console encoding
+# rather than only ever running under a UTF-8-default environment.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Add current directory to path so imports work correctly
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -492,9 +500,25 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
         
     print("Waiting for FFmpeg to finish...")
     ffmpeg_process.wait()
+
+    # Close the stderr log file handle now that ffmpeg has exited (can't
+    # close it earlier — ffmpeg writes to it throughout the run). Previously
+    # this handle was opened in ffmpeg.py and never closed anywhere.
+    log_file = getattr(ffmpeg_process, "_claude_log_file", None)
+    log_path = getattr(ffmpeg_process, "_claude_log_path", None)
+    if log_file:
+        log_file.close()
     
     if ffmpeg_process.returncode != 0:
-        err_out = ffmpeg_process.stderr.read().decode("utf-8") if ffmpeg_process.stderr else "Unknown error"
+        # Read the actual error from the log file on disk — ffmpeg_process.stderr
+        # is always None here since stderr was redirected to a file, not a
+        # pipe, so the old `ffmpeg_process.stderr.read() if ... else "Unknown
+        # error"` fallback always silently produced "Unknown error" even
+        # though the real message was on disk the whole time.
+        err_out = "Unknown error"
+        if log_path and os.path.exists(log_path):
+            with open(log_path, "r") as f:
+                err_out = f.read() or "(ffmpeg log file was empty)"
         raise RuntimeError(f"FFmpeg failed with code {ffmpeg_process.returncode}\n{err_out}")
         
     print(f"Successfully compiled video to {output_path}")
