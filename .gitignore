@@ -1,6 +1,8 @@
 *.mp4
 *.png
 *.jpg
+*.ffmpeg.log
+*_provenance.json
 temp_render_*/
 output/
 __pycache__/
