@@ -7,6 +7,7 @@ import shutil
 import json
 import datetime
 import subprocess
+import time
 from PIL import Image, ImageDraw, ImageFont
 
 # Same UTF-8 stdout fix as tests/run_physics_tests.py — several simulations
@@ -552,11 +553,32 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
 
         
     # 6. Cleanup temp files
-    try:
-        shutil.rmtree(temp_dir)
+    # Retry with backoff instead of a single attempt: on Windows, a
+    # just-written folder can be transiently locked by a background process
+    # (OneDrive sync indexing new files, antivirus scanning, etc.) for a
+    # second or two after the render finishes writing to it — not a real
+    # problem, just a timing race. A single rmtree attempt fails outright in
+    # that window (confirmed: WinError 5 "Access is denied" when the repo
+    # sits inside an actively-syncing OneDrive folder). Retrying a few times
+    # with a short delay resolves this the vast majority of the time without
+    # needing to know or care what's holding the lock.
+    cleanup_succeeded = False
+    last_error = None
+    for attempt in range(5):
+        try:
+            shutil.rmtree(temp_dir)
+            cleanup_succeeded = True
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < 4:
+                time.sleep(0.5 * (attempt + 1))  # 0.5s, 1.0s, 1.5s, 2.0s
+
+    if cleanup_succeeded:
         print("Cleaned up temporary rendering directory.")
-    except Exception as e:
-        print(f"Warning: Could not clean up temporary folder {temp_dir}: {e}")
+    else:
+        print(f"Warning: Could not clean up temporary folder {temp_dir} after 5 attempts: {last_error}")
+        print("This does not affect the render output — only leftover temp files remain.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Render simulation equations to video.")
