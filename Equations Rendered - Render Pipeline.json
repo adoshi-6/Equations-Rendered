@@ -1,0 +1,1816 @@
+{
+  "name": "Equations Rendered - Render Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e60f73b0-3230-4717-acab-ca40ab1e2b79",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Setup notes\n1. Set your Google Sheets document (spreadsheet ID) on both Google Sheets nodes below.\n2. Set your Telegram credential + chat ID (8988190596) on the Telegram node.\n3. This workflow checks the Queue tab for a pending item, and only pings Telegram about an empty queue ONCE per exhaustion (no repeat spam).\n4. Wire the 'Queue Has Item' TRUE branch into your actual render-trigger logic (POST /jobs/render on render_service.py).",
+        "height": 308,
+        "width": 380
+      },
+      "id": "67d25775-4bbf-49eb-82c3-209f2331ead3",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a8911b47-67e1-4329-9d61-0324adb065e9",
+      "name": "Read Next Pending Queue Item",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        176,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.queueHasItem }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "10175333-bcb0-4632-85e1-c2ea22afbbcd",
+      "name": "Queue Has Item?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Settings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "settings_key": "main",
+            "queue_empty_notified": "false"
+          },
+          "matchingColumns": [
+            "settings_key"
+          ],
+          "schema": [
+            {
+              "id": "queue_empty_notified",
+              "displayName": "queue_empty_notified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_checked",
+              "displayName": "last_checked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "settings_key",
+              "displayName": "settings_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1cd48b62-4ab2-4b94-b8c3-f373f61efa0c",
+      "name": "Reset queue_empty_notified = FALSE",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1024,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Wire this branch onward to:\n1. Mark the Queue row 'in_progress'\n2. POST /jobs/render on render_service.py\n(continue building Phase C from here)",
+        "height": 172,
+        "width": 300
+      },
+      "id": "70d4590b-9842-4a13-8031-7e4ecbe463f4",
+      "name": "Continue Render Flow Here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Settings",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "4de11e76-9dd4-40a2-8e28-da6df84f74bd",
+      "name": "Read Settings Flag",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-2",
+              "leftValue": "={{ $json.queue_empty_notified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dbc28381-be75-47f4-a757-e05a1ecd150e",
+      "name": "Already Notified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1136,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8988190596",
+        "text": "⚠️ Equations Rendered: the render queue is empty. Add more items to the Queue tab to resume uploads.",
+        "additionalFields": {}
+      },
+      "id": "7e81b1e3-ed91-4c66-a254-2ef69f881ec3",
+      "name": "Send Telegram: Queue Empty",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1376,
+        480
+      ],
+      "webhookId": "dac83105-9e37-4b16-81b0-65d9e9517bd6",
+      "credentials": {
+        "telegramApi": {
+          "id": "DuRiOMHTD6MIFWXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Settings",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "settings_key": "main",
+            "queue_empty_notified": "true"
+          },
+          "matchingColumns": [
+            "settings_key"
+          ],
+          "schema": [
+            {
+              "id": "queue_empty_notified",
+              "displayName": "queue_empty_notified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_checked",
+              "displayName": "last_checked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "settings_key",
+              "displayName": "settings_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0cfda85f-260d-4427-87d8-bd5a7aa570dd",
+      "name": "Set queue_empty_notified = TRUE",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "9c9f2785-35f6-4893-bbd9-52ddf5d1bdbd",
+      "name": "Do Nothing (Already Notified)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pending = $input.all().find(item => item.json.status === 'pending');\nif (pending) {\n  return [{ json: { queueHasItem: true, ...pending.json } }];\n}\nreturn [{ json: { queueHasItem: false } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        288
+      ],
+      "id": "065f7f4d-a6da-455c-b575-48e400fdfe52",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 509463485,
+          "mode": "list",
+          "cachedResultName": "Queue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=509463485"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "status": "in_progress"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item_name",
+              "displayName": "item_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_module",
+              "displayName": "simulation_module",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "config_notes",
+              "displayName": "config_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_added",
+              "displayName": "date_added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        912,
+        0
+      ],
+      "id": "662c307f-77ce-4ca0-9249-195349e56b0a",
+      "name": "Mark Queue Row In Progress",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8420/jobs/render",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"simulation_name\": \"{{ $('Read Next Pending Queue Item').item.json.simulation_module }}\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "dfd3d3e2-3891-4e85-b8ae-73a4c86e0b75",
+      "name": "POST Render Job"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        0
+      ],
+      "id": "f0415b0b-fe7a-43cc-b032-6cbe94461b2a",
+      "name": "Wait",
+      "webhookId": "0562daa4-94ad-48d4-9816-8ff204d99774"
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8420/jobs/{{ $json.job_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1536,
+        0
+      ],
+      "id": "a08a2cb2-3f19-40ea-a34a-e56af0241682",
+      "name": "Check Render Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "433250db-ebdf-493a-b4e6-c1a3fc2b17ef",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1952,
+        0
+      ],
+      "id": "ae1bf929-d103-4a08-85b2-5948ef24f6aa",
+      "name": "Render Failed?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "96a39aaf-78e2-41d8-a27d-cf6cb4a8eb93",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "complete",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1744,
+        0
+      ],
+      "id": "e316d04b-db84-4e35-a1dd-d95b51959a0e",
+      "name": "Render Completed?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8420/jobs/verify",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=   {\"simulation_name\": \"{{ $('Read Next Pending Queue Item').item.json.simulation_module }}\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1888,
+        -352
+      ],
+      "id": "2bde74d7-7ec3-4561-85c8-135d709bcebc",
+      "name": "POST Verify Job"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2112,
+        -352
+      ],
+      "id": "51290a2c-5c2e-4ae1-bfdc-9fb7e4c11134",
+      "name": "Wait For Verify",
+      "webhookId": "261c28d5-322f-4ee1-a4fc-f582b2cf6be5"
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8420/jobs/{{ $json.job_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2320,
+        -352
+      ],
+      "id": "1260ebb6-7799-4722-8110-9986ac5851f1",
+      "name": "Check Verify Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9384b09b-e945-4523-a747-ebf66a28c940",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "complete",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2496,
+        -352
+      ],
+      "id": "cb48379f-1b99-4381-9b1e-c12cabea521d",
+      "name": "Verify Job Done?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "597f429d-d1a3-49f5-bc43-971da1d65d58",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2704,
+        -272
+      ],
+      "id": "b5148078-a432-459f-96fc-3c52649c6ae3",
+      "name": "Verify Job Errored?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "15f3825e-89f4-4791-8fe3-bef2a017d7b0",
+              "leftValue": "={{ $json.result.passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2720,
+        -592
+      ],
+      "id": "ab2e0b3c-6029-4915-9090-72a1407b93b5",
+      "name": "Verify Tests Passed?"
+    },
+    {
+      "parameters": {
+        "chatId": "8988190596",
+        "text": "=⚠️ Render failed: {{ $('Read Next Pending Queue Item').item.json.item_name }} ({{ $('Read Next Pending Queue Item').item.json.simulation_module }}) Reason: {{ $json.clean_error }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        -16
+      ],
+      "id": "2a246d0b-5c69-4d82-831a-b0856cd04cfa",
+      "name": "Telegram: Render Failed",
+      "webhookId": "2f70e332-06c8-4771-90db-982fb35e41f6",
+      "credentials": {
+        "telegramApi": {
+          "id": "DuRiOMHTD6MIFWXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 509463485,
+          "mode": "list",
+          "cachedResultName": "Queue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=509463485"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Read Next Pending Queue Item').item.json.id }}",
+            "status": "failed"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item_name",
+              "displayName": "item_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_module",
+              "displayName": "simulation_module",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "config_notes",
+              "displayName": "config_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_added",
+              "displayName": "date_added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2624,
+        -16
+      ],
+      "id": "f776e19b-3f78-49af-b0d4-1529d9ed8781",
+      "name": "Mark Queue Row Failed (Render)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8988190596",
+        "text": "=⚠️ Render failed: {{ $('Read Next Pending Queue Item').item.json.item_name }} ({{ $('Read Next Pending Queue Item').item.json.simulation_module }}) Reason: {{ $json.clean_error }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3152,
+        -288
+      ],
+      "id": "c1628c8c-7a0e-43e5-b67f-56a4f9ce6a30",
+      "name": "Telegram: Verify Errored",
+      "webhookId": "c2566715-9e8d-4999-b157-db96e141c7fb",
+      "credentials": {
+        "telegramApi": {
+          "id": "DuRiOMHTD6MIFWXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 509463485,
+          "mode": "list",
+          "cachedResultName": "Queue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=509463485"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "failed",
+            "id": "={{ $('Read Next Pending Queue Item').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item_name",
+              "displayName": "item_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_module",
+              "displayName": "simulation_module",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "config_notes",
+              "displayName": "config_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_added",
+              "displayName": "date_added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3360,
+        -288
+      ],
+      "id": "67ba4eb0-bda0-49a9-a8d7-dce3fd4cc751",
+      "name": "Mark Queue Row Failed (Verify Error)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8988190596",
+        "text": "=⚠️ Render failed: {{ $('Read Next Pending Queue Item').item.json.item_name }} ({{ $('Read Next Pending Queue Item').item.json.simulation_module }}) Reason: {{ $json.clean_error }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2992,
+        -496
+      ],
+      "id": "e18ca8ff-1137-46e5-ae8e-324123283881",
+      "name": "Telegram: Tests Failed",
+      "webhookId": "f753cae3-e3cc-4826-9bb5-3b4766ce3f38",
+      "credentials": {
+        "telegramApi": {
+          "id": "DuRiOMHTD6MIFWXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 509463485,
+          "mode": "list",
+          "cachedResultName": "Queue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=509463485"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "failed",
+            "id": "={{ $('Read Next Pending Queue Item').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item_name",
+              "displayName": "item_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_module",
+              "displayName": "simulation_module",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "config_notes",
+              "displayName": "config_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_added",
+              "displayName": "date_added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3248,
+        -496
+      ],
+      "id": "4483de84-32a4-450c-8276-76465e2d9a2d",
+      "name": "Mark Queue Row Failed (Tests)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.error || 'Unknown error'; let clean; if (raw.includes('stderr:')) { const stderrPart = raw.split('stderr:')[1] || ''; const lines = stderrPart.split('\\n').map(l => l.trim()).filter(l => l.length > 0); clean = lines.slice(-3).join('\\n') || raw.split('\\n')[0]; } else { clean = raw.split('\\n')[0]; } return [{ json: { ...$json, clean_error: clean } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2192,
+        -16
+      ],
+      "id": "4a0cc33f-a8a7-4e51-b9b8-ded41d618d14",
+      "name": "Extract Clean Error (Render)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.error || 'Unknown error'; let clean; if (raw.includes('stderr:')) { const stderrPart = raw.split('stderr:')[1] || ''; const lines = stderrPart.split('\\n').map(l => l.trim()).filter(l => l.length > 0); clean = lines.slice(-3).join('\\n') || raw.split('\\n')[0]; } else { clean = raw.split('\\n')[0]; } return [{ json: { ...$json, clean_error: clean } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        -288
+      ],
+      "id": "7c241e3c-eb70-4c33-b5ce-da42941da11a",
+      "name": "Extract Clean Error (Verify)"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 202831564,
+          "mode": "list",
+          "cachedResultName": "Tracking Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=202831564"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "video_id": "=v-{{ $now.format('yyyyMMddHHmmss') }}",
+            "queue_id": "= {{ $('Read Next Pending Queue Item').item.json.id }}",
+            "simulation_name": "={{ $('Read Next Pending Queue Item').item.json.simulation_module }}",
+            "status": "verified",
+            "render_output_path": "= {{ $('Check Render Status').item.json.result.output_path }}",
+            "render_date": "={{ $now.format('yyyy-MM-dd') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "video_id",
+              "displayName": "video_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "queue_id",
+              "displayName": "queue_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_name",
+              "displayName": "simulation_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "youtube_video_id",
+              "displayName": "youtube_video_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "youtube_title",
+              "displayName": "youtube_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "render_date",
+              "displayName": "render_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "upload_date",
+              "displayName": "upload_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "render_output_path",
+              "displayName": "render_output_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2992,
+        -688
+      ],
+      "id": "4a33194d-baca-4b79-a83b-bddac87012fd",
+      "name": "Write Tracking Log Row",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA",
+          "mode": "list",
+          "cachedResultName": "Equations Rendered Pipeline Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 509463485,
+          "mode": "list",
+          "cachedResultName": "Queue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1H_SjzYwh5g5Du9NpaGDMvks5cG2Qe_W78QW2642WdRA/edit#gid=509463485"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Read Next Pending Queue Item').item.json.id }}",
+            "status": "done"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item_name",
+              "displayName": "item_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "simulation_module",
+              "displayName": "simulation_module",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "config_notes",
+              "displayName": "config_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_added",
+              "displayName": "date_added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3200,
+        -688
+      ],
+      "id": "7afd2a4a-c701-4221-9bdd-97d08f5ecda2",
+      "name": "Mark Queue Row Done",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HBdED1DDxtIDjpsA",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Next Pending Queue Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Next Pending Queue Item": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue Has Item?": {
+      "main": [
+        [
+          {
+            "node": "Mark Queue Row In Progress",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reset queue_empty_notified = FALSE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Settings Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Settings Flag": {
+      "main": [
+        [
+          {
+            "node": "Already Notified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Notified?": {
+      "main": [
+        [
+          {
+            "node": "Do Nothing (Already Notified)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Telegram: Queue Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram: Queue Empty": {
+      "main": [
+        [
+          {
+            "node": "Set queue_empty_notified = TRUE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Queue Has Item?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Queue Row In Progress": {
+      "main": [
+        [
+          {
+            "node": "POST Render Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Render Job": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Check Render Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Render Status": {
+      "main": [
+        [
+          {
+            "node": "Render Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Failed?": {
+      "main": [
+        [
+          {
+            "node": "Extract Clean Error (Render)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Completed?": {
+      "main": [
+        [
+          {
+            "node": "POST Verify Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Render Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Verify Job": {
+      "main": [
+        [
+          {
+            "node": "Wait For Verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Verify": {
+      "main": [
+        [
+          {
+            "node": "Check Verify Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Verify Status": {
+      "main": [
+        [
+          {
+            "node": "Verify Job Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Job Done?": {
+      "main": [
+        [
+          {
+            "node": "Verify Tests Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Job Errored?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Job Errored?": {
+      "main": [
+        [
+          {
+            "node": "Extract Clean Error (Verify)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait For Verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Render Failed": {
+      "main": [
+        [
+          {
+            "node": "Mark Queue Row Failed (Render)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Verify Errored": {
+      "main": [
+        [
+          {
+            "node": "Mark Queue Row Failed (Verify Error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Tests Passed?": {
+      "main": [
+        [
+          {
+            "node": "Write Tracking Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Tests Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Tests Failed": {
+      "main": [
+        [
+          {
+            "node": "Mark Queue Row Failed (Tests)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Clean Error (Render)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Render Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Clean Error (Verify)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Verify Errored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Tracking Log Row": {
+      "main": [
+        [
+          {
+            "node": "Mark Queue Row Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1c5156fa-5570-4f66-908b-4b90c97ce09e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "21a9b627b079ea159cbaaab17b397e4300014f2872e1963f210cc3949db5ba91"
+  },
+  "nodeGroups": [],
+  "id": "5ntuGcDzEK99qRXN",
+  "tags": []
+}
