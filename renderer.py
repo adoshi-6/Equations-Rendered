@@ -137,9 +137,9 @@ def render_video(config_path: str, output_path: str, baseline_dir: str = None) -
         
     duration = max(10.0, min(30.0, duration))
     
-    # Apply tuning adjustment: +5s buffer AFTER plateau & clamp for chaotic ODEs
-    if sim_name in ["double_pendulum", "lorenz", "rossler", "three_body"]:
-        duration += 5.0
+    # Apply tuning adjustment: +10s buffer AFTER plateau & clamp for chaotic ODEs
+    if sim_name in ["double_pendulum", "lorenz", "rossler", "three_body", "gradient_descent"]:
+        duration += 10.0
         duration = min(30.0, duration)  # Ensure we still respect the 30s ceiling
         
     config["duration"] = duration  # Update config so generate() uses the clamped duration

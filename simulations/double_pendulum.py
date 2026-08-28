@@ -88,8 +88,8 @@ def recommended_duration(config: dict) -> float:
         std_dev = float(xp.std(theta2))
         if plateaued or std_dev > 1.0:
             reason = "spatial extent plateaued" if plateaued else "divergence threshold (1.0 rad) crossed"
-            print(f"Double Pendulum {reason} at {t:.1f}s. Adding 2s buffer.")
-            return t + 2.0
+            print(f"Double Pendulum {reason} at {t:.1f}s.")
+            return t
             
     print(f"Double Pendulum stopping criteria not met within {max_t}s.")
     return max_t

@@ -119,8 +119,8 @@ def recommended_duration(config: dict) -> float:
         std_dev = float(xp.std(state[:, 0]))
         if plateaued or std_dev > 0.5:
             reason = "spatial extent plateaued" if plateaued else "divergence threshold (0.5) crossed"
-            print(f"Three Body {reason} at {t:.1f}s. Adding 2s buffer.")
-            return t + 2.0
+            print(f"Three Body {reason} at {t:.1f}s.")
+            return t
             
     print(f"Three Body stopping criteria not met within {max_t}s.")
     return max_t

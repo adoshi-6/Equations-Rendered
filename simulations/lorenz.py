@@ -75,8 +75,8 @@ def recommended_duration(config: dict) -> float:
         std_dev = float(xp.std(state[:, 0]))
         if plateaued or std_dev > 5.0:
             reason = "spatial extent plateaued" if plateaued else "divergence threshold (5.0) crossed"
-            print(f"Lorenz {reason} at {t:.1f}s. Adding 3s buffer.")
-            return t + 3.0
+            print(f"Lorenz {reason} at {t:.1f}s.")
+            return t
             
     print(f"Lorenz stopping criteria not met within {max_t}s.")
     return max_t

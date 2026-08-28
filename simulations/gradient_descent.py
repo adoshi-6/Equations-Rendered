@@ -77,8 +77,8 @@ def recommended_duration(config: dict) -> float:
         mean_grad = float(xp.mean(mag))
         
         if mean_grad < 0.5:
-            print(f"Gradient Descent converged at {t:.1f}s. Adding 2s buffer.")
-            return t + 2.0
+            print(f"Gradient Descent converged at {t:.1f}s.")
+            return t
             
         scale = xp.minimum(mag + 1e-8, 5.0) / (mag + 1e-8)
         px = px - learning_rate * gx * scale
