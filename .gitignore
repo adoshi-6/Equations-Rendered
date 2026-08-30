@@ -7,3 +7,4 @@ temp_render_*/
 output/
 __pycache__/
 render_request.json 
+.env

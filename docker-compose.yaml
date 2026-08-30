@@ -1,0 +1,26 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_FOLDERS_ENABLED=true
+      - WEBHOOK_URL=https://paper-autistic-playhouse.ngrok-free.dev/
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: always
+    depends_on:
+      - n8n
+    command: http --url=paper-autistic-playhouse.ngrok-free.dev --traffic-policy-file=/etc/ngrok/n8n.yaml n8n:5678
+    volumes:
+      - ./n8n.yaml:/etc/ngrok/n8n.yaml
+    env_file: .env
+
+volumes:
+  n8n_data:
+    external: true
